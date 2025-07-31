@@ -2,11 +2,23 @@
 
 import { useState, useEffect, useRef } from "react";
 import { v4 as uuidv4 } from "uuid";
+import { useAuth } from "./authprovider";
+import {
+  collection,
+  getDocs,
+  addDoc,
+  deleteDoc,
+  updateDoc,
+  doc,
+  Timestamp,
+} from "firebase/firestore";
+import { db } from "./firebase";
 
 const statuses = ["Applied", "Interviewing", "Offer", "Rejected"];
 
 interface JobEntry {
   id: string;
+  uid: string;
   company: string;
   role: string;
   link: string;
@@ -15,22 +27,35 @@ interface JobEntry {
 }
 
 export default function Home() {
-  
+  const { user, login, logout } = useAuth();
+
+  // Show sign-in screen if not logged in
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black text-white">
+        <button onClick={login} className="px-4 py-2 bg-blue-600 rounded-lg">
+          Sign in with Google
+        </button>
+      </div>
+    );
+  }
+
   const [jobs, setJobs] = useState<JobEntry[]>([]);
   const [form, setForm] = useState({ company: "", role: "", link: "", notes: "" });
   const [editId, setEditId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
-
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    const stored = localStorage.getItem("jobs");
-    if (stored) setJobs(JSON.parse(stored));
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("jobs", JSON.stringify(jobs));
-  }, [jobs]);
+    const fetchJobs = async () => {
+      const jobSnapshot = await getDocs(collection(db, "jobs"));
+      const jobsData = jobSnapshot.docs
+        .map(doc => ({ id: doc.id, ...doc.data() }))
+        .filter((job: any) => job.uid === user.uid) as JobEntry[];
+      setJobs(jobsData);
+    };
+    fetchJobs();
+  }, [user]);
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -46,14 +71,23 @@ export default function Home() {
     setForm({ ...form, [e.target.name]: e.target.value });
   };
 
-  const handleAddJob = () => {
+  const handleAddJob = async () => {
     if (!form.company || !form.role) return;
 
     if (editId) {
+      const jobRef = doc(db, "jobs", editId);
+      await updateDoc(jobRef, { ...form });
       setJobs(jobs.map(job => job.id === editId ? { ...job, ...form } : job));
       setEditId(null);
     } else {
-      const newJob: JobEntry = { id: uuidv4(), ...form, status: "Applied" };
+      const newJobData = {
+        ...form,
+        status: "Applied",
+        uid: user.uid,
+        createdAt: Timestamp.now(),
+      };
+      const docRef = await addDoc(collection(db, "jobs"), newJobData);
+      const newJob: JobEntry = { id: docRef.id, ...newJobData };
       setJobs([newJob, ...jobs]);
     }
 
@@ -66,7 +100,8 @@ export default function Home() {
     setOpenMenuId(null);
   };
 
-  const handleDelete = (id: string) => {
+  const handleDelete = async (id: string) => {
+    await deleteDoc(doc(db, "jobs", id));
     setJobs(jobs.filter(job => job.id !== id));
     setOpenMenuId(null);
   };
@@ -75,8 +110,10 @@ export default function Home() {
     e.dataTransfer.setData("jobId", id);
   };
 
-  const onDrop = (e: React.DragEvent<HTMLDivElement>, newStatus: string) => {
+  const onDrop = async (e: React.DragEvent<HTMLDivElement>, newStatus: string) => {
     const id = e.dataTransfer.getData("jobId");
+    const jobRef = doc(db, "jobs", id);
+    await updateDoc(jobRef, { status: newStatus });
     const updated = jobs.map(job => job.id === id ? { ...job, status: newStatus } : job);
     setJobs(updated);
   };
@@ -87,7 +124,11 @@ export default function Home() {
 
   return (
     <div className="h-screen overflow-hidden flex items-center justify-center bg-black bg-opacity-90 p-6">
+      <button onClick={logout} className="absolute top-4 right-4 text-white bg-red-500 px-3 py-1 rounded z-50">
+        Logout
+      </button>
       <div className="relative w-full max-w-7xl p-8 rounded-2xl backdrop-blur-md bg-white/5 border border-white/20 overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.1),_0_0_50px_0_rgba(0,255,255,0.2)_inset,_0_0_50px_0_rgba(255,0,255,0.2)_inset]">
+
 
         {/* Neon corners */}
         <div className="absolute top-0 right-0 w-36 h-36 bg-cyan-400/30 rounded-full blur-[80px] border-t-2 border-r-2 border-cyan-300/40 pointer-events-none" style={{ transform: 'translate(50%, -50%)' }} />
