@@ -1,5 +1,11 @@
 @import "tailwindcss";
 
+
+:root {
+  --font-geist-sans: 'Geist', sans-serif;
+  --font-geist-mono: 'Geist Mono', monospace;
+}
+
 :root {
   --background: #ffffff;
   --foreground: #171717;

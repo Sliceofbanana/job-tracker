@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import Script from "next/script";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -26,14 +27,13 @@ export default function RootLayout({
     <html lang="en">
       <head>
         <link rel="icon" href="/footsteps.ico" />
-        <script src="https://cdnjs.cloudflare.com/ajax/libs/sketch.js/1.0/sketch.min.js"></script>
-        <script src="/skylines.js" defer></script>
       </head>
-      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
-        <canvas id="background-canvas" className="canvas-bg"></canvas>
-        <div className="relative z-10">
-          {children}
-        </div>
+      <body className={`${geistSans.variable} ${geistMono.variable}`}>
+        {children}
+        <Script
+          src="https://cdnjs.cloudflare.com/ajax/libs/sketch.js/1.0/sketch.min.js"
+          strategy="afterInteractive"
+        />
       </body>
     </html>
   );
