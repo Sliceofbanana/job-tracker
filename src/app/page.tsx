@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { v4 as uuidv4 } from "uuid";
 import { useAuth } from "./authprovider";
 import {
   collection,
@@ -29,17 +28,6 @@ interface JobEntry {
 export default function Home() {
   const { user, login, logout } = useAuth();
 
-  // Show sign-in screen if not logged in
-  if (!user) {
-    return (
-      <div className="min-h-screen flex items-center justify-center bg-black text-white">
-        <button onClick={login} className="px-4 py-2 bg-blue-600 rounded-lg">
-          Sign in with Google
-        </button>
-      </div>
-    );
-  }
-
   const [jobs, setJobs] = useState<JobEntry[]>([]);
   const [form, setForm] = useState({ company: "", role: "", link: "", notes: "" });
   const [editId, setEditId] = useState<string | null>(null);
@@ -47,13 +35,23 @@ export default function Home() {
   const menuRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
+    if (!user) return;
+
     const fetchJobs = async () => {
       const jobSnapshot = await getDocs(collection(db, "jobs"));
-      const jobsData = jobSnapshot.docs
-        .map(doc => ({ id: doc.id, ...doc.data() }))
-        .filter((job: any) => job.uid === user.uid) as JobEntry[];
+      const jobsData: JobEntry[] = jobSnapshot.docs
+        .map((doc) => {
+          const data = doc.data() as Omit<JobEntry, "id">;
+          return {
+            id: doc.id,
+            ...data,
+          };
+        })
+        .filter((job) => job.uid === user.uid);
+        
       setJobs(jobsData);
     };
+
     fetchJobs();
   }, [user]);
 
@@ -66,6 +64,20 @@ export default function Home() {
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
+
+  // Return login prompt after hooks
+  if (!user) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-black text-white">
+        <button onClick={login} className="px-4 py-2 bg-blue-600 rounded-lg">
+          Sign in with Google
+        </button>
+      </div>
+    );
+  }
+
+  // ... rest of the component ...
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     setForm({ ...form, [e.target.name]: e.target.value });
