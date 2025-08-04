@@ -2,8 +2,6 @@
 
 A modern, secure job application tracking system built with Next.js, Firebase, and beautiful glassmorphism design. Track your job applications, manage interview stages, and stay organized in your job search journey.
 
-![Job Tracker Preview](https://via.placeholder.com/800x400/333333/00ffff?text=Job+Tracker+Screenshot)
-
 ## ✨ Features
 
 ### 🔐 **Authentication & Security**
