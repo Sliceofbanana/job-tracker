@@ -153,6 +153,36 @@ export default function Home() {
     }
   }, [openMenuId]);
 
+  // Fetch jobs when user logs in
+  useEffect(() => {
+    const fetchJobs = async () => {
+      if (!user) return;
+      
+      setLoading(true);
+      setError(null);
+      try {
+        const q = query(
+          collection(db, "jobs"),
+          where("uid", "==", user.uid),
+          orderBy("createdAt", "desc")
+        );
+        const querySnapshot = await getDocs(q);
+        const jobsData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as JobEntry[];
+        setJobs(jobsData);
+      } catch (err) {
+        console.error("Error fetching jobs:", err);
+        setError("Failed to load your jobs. Please refresh the page.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchJobs();
+  }, [user]);
+
   // Return login prompt after hooks
   if (!user) {
     return <Login onLogin={login} />;
