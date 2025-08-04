@@ -47,7 +47,6 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [draggedJobId, setDraggedJobId] = useState<string | null>(null);
   const [lastActionTime, setLastActionTime] = useState(0);
-  const menuRef = useRef<HTMLDivElement>(null);
 
   // Rate limiting helper
   const isRateLimited = (): boolean => {
@@ -80,15 +79,17 @@ export default function Home() {
     })();
   }, [user]);
 
+  // Close menu when clicking outside
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (menuRef.current && !menuRef.current.contains(event.target as Node)) {
-        setOpenMenuId(null);
-      }
+    const handleClickOutside = () => {
+      setOpenMenuId(null);
     };
-    document.addEventListener("mousedown", handleClickOutside);
-    return () => document.removeEventListener("mousedown", handleClickOutside);
-  }, []);
+    
+    if (openMenuId) {
+      document.addEventListener("mousedown", handleClickOutside);
+      return () => document.removeEventListener("mousedown", handleClickOutside);
+    }
+  }, [openMenuId]);
 
   // Return login prompt after hooks
   if (!user) {
@@ -250,38 +251,38 @@ export default function Home() {
                   {filteredJobs.map(job => (
                     <div
                       key={job.id}
-                      className={`relative border border-white/30 rounded-lg p-4 space-y-2 hover:shadow-md transition w-full bg-white/10 ${job.status === 'Rejected' ? 'opacity-50' : ''} ${draggedJobId === job.id ? 'ring-2 ring-fuchsia-400' : ''}`}
+                      className={`relative border border-gray-300 rounded-lg p-4 space-y-2 hover:shadow-md transition w-full bg-white ${job.status === 'Rejected' ? 'opacity-50' : ''} ${draggedJobId === job.id ? 'ring-2 ring-fuchsia-400' : ''}`}
                       draggable
                       onDragStart={(e) => onDragStart(e, job.id)}
                       onDragEnd={() => setDraggedJobId(null)}
                       aria-grabbed={draggedJobId === job.id}
                     >
                       <div className="flex justify-between items-start">
-                        <div className={`text-lg break-words font-bold ${job.status === 'Offer' ? 'text-green-400' : job.status === 'Rejected' ? 'text-red-500' : 'text-white'}`}>{job.role}</div>
+                        <div className={`text-lg break-words font-bold ${job.status === 'Offer' ? 'text-green-600' : job.status === 'Rejected' ? 'text-red-600' : 'text-gray-800'}`}>{job.role}</div>
                         {/* 3-dot dropdown */}
-                        <div className="relative" ref={menuRef}>
+                        <div className="relative">
                           <button
                             onClick={() => setOpenMenuId(openMenuId === job.id ? null : job.id)}
-                            className="text-xl text-white/60 hover:text-white cursor-pointer"
+                            className="text-xl text-gray-600 hover:text-gray-800 cursor-pointer"
                             aria-label="Open job menu"
                             tabIndex={0}
                           >
                             ⋮
                           </button>
                           {openMenuId === job.id && (
-                            <div className="absolute top-6 right-0 flex flex-col p-2 gap-1 bg-white/10 backdrop-blur-md border border-white/20 rounded-md shadow-md z-10 min-w-[120px]">
-                              <button onClick={() => handleEdit(job)} className="px-3 py-1 text-sm text-white text-left hover:bg-white/10 rounded cursor-pointer" aria-label="Edit job">✏️ Edit</button>
-                              <button onClick={() => handleDelete(job.id)} className="px-3 py-1 text-sm text-red-400 text-left hover:bg-red-400/10 rounded cursor-pointer" aria-label="Delete job">🗑️ Delete</button>
+                            <div className="absolute top-6 right-0 flex flex-col p-2 gap-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 min-w-[120px]">
+                              <button onClick={() => handleEdit(job)} className="px-3 py-1 text-sm text-gray-700 text-left hover:bg-gray-100 rounded cursor-pointer" aria-label="Edit job">✏️ Edit</button>
+                              <button onClick={() => handleDelete(job.id)} className="px-3 py-1 text-sm text-red-600 text-left hover:bg-red-50 rounded cursor-pointer" aria-label="Delete job">🗑️ Delete</button>
                             </div>
                           )}
                         </div>
                       </div>
-                      <div className="text-sm text-white/70 break-words">{job.company}</div>
+                      <div className="text-sm text-gray-600 break-words">{job.company}</div>
                       {job.link && (
-                        <a href={job.link} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:underline break-words" aria-label="View job link">View Job</a>
+                        <a href={job.link} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline break-words" aria-label="View job link">View Job</a>
                       )}
                       {job.notes && (
-                        <div className="text-xs text-white/60 italic break-words">{job.notes}</div>
+                        <div className="text-xs text-gray-500 italic break-words">{job.notes}</div>
                       )}
                     </div>
                   ))}
