@@ -316,7 +316,7 @@ export default function Home() {
 
   return (
     <div className="h-screen overflow-hidden flex items-center justify-center p-6" style={{ backgroundColor: '#333333' }}>
-      <button onClick={logout} className="absolute top-4 right-4 px-4 py-2 rounded-lg bg-gradient-to-br from-red-500/30 to-red-600/30 backdrop-blur-md border border-white/30 text-white font-bold shadow-[0_0_10px_rgba(255,255,255,0.3)] hover:shadow-[0_0_20px_rgba(255,0,0,0.5)] transition cursor-pointer z-50" aria-label="Logout">
+      <button onClick={logout} className="absolute top-4 right-4 px-6 py-3 rounded-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-red-400/50 z-50" aria-label="Logout">
         🚪 Logout
       </button>
       <div className="relative w-full max-w-7xl p-8 rounded-2xl backdrop-blur-md bg-gradient-to-br from-purple-600 to-blue-700 border border-white/20 overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.1),_0_0_50px_0_rgba(0,255,255,0.2)_inset,_0_0_50px_0_rgba(255,0,255,0.2)_inset]">
@@ -355,7 +355,7 @@ export default function Home() {
             </select>
             <button
               onClick={() => setShowStats(!showStats)}
-              className="px-4 py-2 rounded-lg bg-gradient-to-br from-purple-500/30 to-pink-500/30 backdrop-blur-md border border-white/30 text-white font-bold hover:shadow-[0_0_20px_rgba(147,51,234,0.5)] transition cursor-pointer"
+              className="px-6 py-3 rounded-lg bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-purple-400/50"
             >
               📊 Stats
             </button>
@@ -405,7 +405,7 @@ export default function Home() {
             <h2 className="text-xl font-bold text-white">Add New Application</h2>
             <button
               onClick={() => setShowAdvancedForm(!showAdvancedForm)}
-              className="px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition cursor-pointer"
+              className="px-6 py-3 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-blue-400/50"
             >
               {showAdvancedForm ? "🔽" : "🔼"} Advanced
             </button>
@@ -443,8 +443,8 @@ export default function Home() {
               <textarea name="notes" placeholder="Notes (e.g., interview tips, HR contact)" value={form.notes} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400 resize-none" rows={2} aria-label="Notes" />
             </div>
 
-            {/* Submit Button - separate row */}
-            <div className="flex justify-center">
+            {/* Submit Button - right aligned */}
+            <div className="flex justify-end">
               <button type="submit" disabled={loading} className={`px-8 py-3 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-green-400/50 ${loading ? 'opacity-50 cursor-not-allowed transform-none' : 'cursor-pointer'}`}
                 aria-label={editId ? "Save Changes" : "Add Job"}>
                 {editId ? "💾 Save Changes" : "➕ Add Job"}
@@ -452,6 +452,9 @@ export default function Home() {
             </div>
           </form>
         </div>
+
+        {/* Separator Line */}
+        <div className="mb-8 w-full h-px bg-gradient-to-r from-transparent via-white/30 to-transparent"></div>
 
         {/* Job Status Columns */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 w-full">
