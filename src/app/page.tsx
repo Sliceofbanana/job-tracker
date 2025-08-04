@@ -81,7 +81,11 @@ export default function Home() {
 
   // Close menu when clicking outside
   useEffect(() => {
-    const handleClickOutside = () => {
+    const handleClickOutside = (event: MouseEvent) => {
+      // Don't close if clicking on a menu or its contents
+      if ((event.target as Element).closest('.menu-dropdown')) {
+        return;
+      }
       setOpenMenuId(null);
     };
     
@@ -270,9 +274,27 @@ export default function Home() {
                             ⋮
                           </button>
                           {openMenuId === job.id && (
-                            <div className="absolute top-6 right-0 flex flex-col p-2 gap-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 min-w-[120px]">
-                              <button onClick={() => handleEdit(job)} className="px-3 py-1 text-sm text-gray-700 text-left hover:bg-gray-100 rounded cursor-pointer" aria-label="Edit job">✏️ Edit</button>
-                              <button onClick={() => handleDelete(job.id)} className="px-3 py-1 text-sm text-red-600 text-left hover:bg-red-50 rounded cursor-pointer" aria-label="Delete job">🗑️ Delete</button>
+                            <div className="menu-dropdown absolute top-6 right-0 flex flex-col p-2 gap-1 bg-white border border-gray-200 rounded-md shadow-lg z-10 min-w-[120px]">
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleEdit(job);
+                                }} 
+                                className="px-3 py-1 text-sm text-gray-700 text-left hover:bg-gray-100 rounded cursor-pointer" 
+                                aria-label="Edit job"
+                              >
+                                ✏️ Edit
+                              </button>
+                              <button 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  handleDelete(job.id);
+                                }} 
+                                className="px-3 py-1 text-sm text-red-600 text-left hover:bg-red-50 rounded cursor-pointer" 
+                                aria-label="Delete job"
+                              >
+                                🗑️ Delete
+                              </button>
                             </div>
                           )}
                         </div>
