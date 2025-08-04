@@ -207,7 +207,7 @@ export default function Home() {
   };
 
   return (
-    <div className="h-screen overflow-hidden flex items-center justify-center bg-#333333 bg-opacity-90 p-6">
+    <div className="h-screen overflow-hidden flex items-center justify-center p-6" style={{ backgroundColor: '#333333' }}>
       <button onClick={logout} className="absolute top-4 right-4 text-white bg-red-500 px-3 py-1 rounded z-50" aria-label="Logout">
         Logout
       </button>
