@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import { useAuth } from "./authprovider";
 import Login from "./login";
 import {
@@ -38,7 +38,7 @@ interface JobEntry {
   interviewDate?: string;
   companyResearch?: string;
   applicationTemplate?: string;
-  createdAt?: any;
+  createdAt?: Timestamp;
 }
 
 export default function Home() {
