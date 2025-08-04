@@ -208,15 +208,19 @@ export default function Home() {
 
   return (
     <div className="h-screen overflow-hidden flex items-center justify-center p-6" style={{ backgroundColor: '#333333' }}>
-      <button onClick={logout} className="absolute top-4 right-4 text-white bg-red-500 px-3 py-1 rounded z-50" aria-label="Logout">
-        Logout
+      <button onClick={logout} className="absolute top-4 right-4 px-4 py-2 rounded-lg bg-gradient-to-br from-red-500/30 to-red-600/30 backdrop-blur-md border border-white/30 text-white font-bold shadow-[0_0_10px_rgba(255,255,255,0.3)] hover:shadow-[0_0_20px_rgba(255,0,0,0.5)] transition cursor-pointer z-50" aria-label="Logout">
+        🚪 Logout
       </button>
       <div className="relative w-full max-w-7xl p-8 rounded-2xl backdrop-blur-md bg-white/5 border border-white/20 overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.1),_0_0_50px_0_rgba(0,255,255,0.2)_inset,_0_0_50px_0_rgba(255,0,255,0.2)_inset]">
         {/* Neon corners */}
         <div className="absolute top-0 right-0 w-36 h-36 bg-cyan-400/30 rounded-full blur-[80px] border-t-2 border-r-2 border-cyan-300/40 pointer-events-none" style={{ transform: 'translate(50%, -50%)' }} />
         <div className="absolute bottom-0 left-0 w-36 h-36 bg-fuchsia-500/30 rounded-full blur-[80px] border-b-2 border-l-2 border-fuchsia-400/40 pointer-events-none" style={{ transform: 'translate(-50%, 50%)' }} />
 
-        <h1 className="text-4xl font-extrabold text-white mb-8 text-center text-primary">🎯 Job Application Tracker</h1>
+        <h1 className="text-4xl font-extrabold text-white mb-8 text-center">🎯 Job Application Tracker</h1>
+
+        {/* Error and Loading Feedback */}
+        {error && <div className="mb-4 text-center text-red-400 font-semibold animate-pulse">{error}</div>}
+        {loading && <div className="mb-4 text-center text-cyan-400 font-semibold animate-pulse">Loading...</div>}
 
         {/* Form Section */}
         <form className="grid md:grid-cols-4 gap-4 items-start mb-10 w-full" onSubmit={e => { e.preventDefault(); handleAddJob(); }}>
@@ -241,24 +245,24 @@ export default function Home() {
                 onDragOver={onDragOver}
                 onDrop={(e) => onDrop(e, status)}
                 aria-label={status + ' jobs'}>
-                <h2 className="text-xl font-bold text-primary mb-4 border-b pb-2 border-base-300">{status}</h2>
+                <h2 className="text-xl font-bold text-white mb-4 border-b pb-2 border-white/30">{status}</h2>
                 <div className="flex flex-col gap-3">
                   {filteredJobs.map(job => (
                     <div
                       key={job.id}
-                      className={`relative border border-base-300 rounded-lg p-4 space-y-2 hover:shadow-md transition w-full bg-base-200/80 ${job.status === 'Rejected' ? 'opacity-50' : ''} ${draggedJobId === job.id ? 'ring-2 ring-fuchsia-400' : ''}`}
+                      className={`relative border border-white/30 rounded-lg p-4 space-y-2 hover:shadow-md transition w-full bg-white/10 ${job.status === 'Rejected' ? 'opacity-50' : ''} ${draggedJobId === job.id ? 'ring-2 ring-fuchsia-400' : ''}`}
                       draggable
                       onDragStart={(e) => onDragStart(e, job.id)}
                       onDragEnd={() => setDraggedJobId(null)}
                       aria-grabbed={draggedJobId === job.id}
                     >
                       <div className="flex justify-between items-start">
-                        <div className={`text-lg break-words font-bold ${job.status === 'Offer' ? 'text-green-400' : job.status === 'Rejected' ? 'text-red-500' : 'text-base-content'}`}>{job.role}</div>
+                        <div className={`text-lg break-words font-bold ${job.status === 'Offer' ? 'text-green-400' : job.status === 'Rejected' ? 'text-red-500' : 'text-white'}`}>{job.role}</div>
                         {/* 3-dot dropdown */}
                         <div className="relative" ref={menuRef}>
                           <button
                             onClick={() => setOpenMenuId(openMenuId === job.id ? null : job.id)}
-                            className="text-xl text-base-content/60 hover:text-base-content cursor-pointer"
+                            className="text-xl text-white/60 hover:text-white cursor-pointer"
                             aria-label="Open job menu"
                             tabIndex={0}
                           >
@@ -272,12 +276,12 @@ export default function Home() {
                           )}
                         </div>
                       </div>
-                      <div className="text-sm text-white text-base-content/70 break-words">{job.company}</div>
+                      <div className="text-sm text-white/70 break-words">{job.company}</div>
                       {job.link && (
-                        <a href={job.link} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-500 hover:underline break-words" aria-label="View job link">View Job</a>
+                        <a href={job.link} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-400 hover:underline break-words" aria-label="View job link">View Job</a>
                       )}
                       {job.notes && (
-                        <div className="text-xs text-white text-base-content/60 italic break-words">{job.notes}</div>
+                        <div className="text-xs text-white/60 italic break-words">{job.notes}</div>
                       )}
                     </div>
                   ))}
