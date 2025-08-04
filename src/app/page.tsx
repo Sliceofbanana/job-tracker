@@ -34,19 +34,28 @@ interface JobEntry {
   link: string;
   notes: string;
   status: string;
+  salary?: string;
+  interviewDate?: string;
+  companyResearch?: string;
+  applicationTemplate?: string;
+  createdAt?: any;
 }
 
 export default function Home() {
   const { user, login, logout } = useAuth();
 
   const [jobs, setJobs] = useState<JobEntry[]>([]);
-  const [form, setForm] = useState({ company: "", role: "", link: "", notes: "" });
+  const [form, setForm] = useState({ company: "", role: "", link: "", notes: "", salary: "", interviewDate: "", companyResearch: "", applicationTemplate: "" });
   const [editId, setEditId] = useState<string | null>(null);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draggedJobId, setDraggedJobId] = useState<string | null>(null);
   const [lastActionTime, setLastActionTime] = useState(0);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterStatus, setFilterStatus] = useState<string>("all");
+  const [showStats, setShowStats] = useState(false);
+  const [showAdvancedForm, setShowAdvancedForm] = useState(false);
 
   // Rate limiting helper
   const isRateLimited = (): boolean => {
@@ -76,12 +85,35 @@ export default function Home() {
     }
   }, [openMenuId]);
 
+  // Fetch jobs from Firebase
+  useEffect(() => {
+    if (!user) return;
+    setLoading(true);
+    setError(null);
+    (async () => {
+      try {
+        const jobSnapshot = await getDocs(collection(db, "jobs"));
+        const jobsData: JobEntry[] = jobSnapshot.docs
+          .map((doc) => ({ id: doc.id, ...(doc.data() as Omit<JobEntry, "id">) }))
+          .filter((job) => job.uid === user.uid);
+        setJobs(jobsData);
+        setError(null); // Clear any previous errors on successful fetch
+      } catch (error) {
+        console.error("Error fetching jobs:", error);
+        // Only show error for actual failures, not empty results
+        setError("Failed to fetch jobs. Please try again.");
+      } finally {
+        setLoading(false);
+      }
+    })();
+  }, [user]);
+
   // Return login prompt after hooks
   if (!user) {
     return <Login onLogin={login} />;
   }
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setForm((prev) => ({ ...prev, [name]: value }));
   };
@@ -94,7 +126,11 @@ export default function Home() {
       company: form.company.trim(),
       role: form.role.trim(),
       link: form.link.trim(),
-      notes: form.notes.trim()
+      notes: form.notes.trim(),
+      salary: form.salary.trim(),
+      interviewDate: form.interviewDate.trim(),
+      companyResearch: form.companyResearch.trim(),
+      applicationTemplate: form.applicationTemplate.trim()
     };
 
     if (!sanitizedForm.company || !sanitizedForm.role) {
@@ -119,6 +155,11 @@ export default function Home() {
       return;
     }
 
+    if (sanitizedForm.companyResearch.length > 1000) {
+      setError("Company research must be less than 1000 characters.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
@@ -137,7 +178,7 @@ export default function Home() {
         const docRef = await addDoc(collection(db, "jobs"), newJobData);
         setJobs((prev) => [{ id: docRef.id, ...newJobData }, ...prev]);
       }
-      setForm({ company: "", role: "", link: "", notes: "" });
+      setForm({ company: "", role: "", link: "", notes: "", salary: "", interviewDate: "", companyResearch: "", applicationTemplate: "" });
     } catch {
       setError("Failed to save job. Please try again.");
     } finally {
@@ -146,7 +187,16 @@ export default function Home() {
   };
 
   const handleEdit = (job: JobEntry) => {
-    setForm({ company: job.company, role: job.role, link: job.link, notes: job.notes });
+    setForm({ 
+      company: job.company, 
+      role: job.role, 
+      link: job.link, 
+      notes: job.notes,
+      salary: job.salary || "",
+      interviewDate: job.interviewDate || "",
+      companyResearch: job.companyResearch || "",
+      applicationTemplate: job.applicationTemplate || ""
+    });
     setEditId(job.id);
     setOpenMenuId(null);
   };
@@ -192,6 +242,30 @@ export default function Home() {
     e.preventDefault();
   };
 
+  // Filter and search functionality
+  const filteredJobs = jobs.filter(job => {
+    const matchesSearch = searchQuery === "" || 
+      job.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      job.notes.toLowerCase().includes(searchQuery.toLowerCase());
+    
+    const matchesFilter = filterStatus === "all" || job.status === filterStatus;
+    
+    return matchesSearch && matchesFilter;
+  });
+
+  // Statistics calculation
+  const stats = {
+    total: jobs.length,
+    applied: jobs.filter(job => job.status === "Applied").length,
+    interviewing: jobs.filter(job => job.status === "Interviewing").length,
+    offers: jobs.filter(job => job.status === "Offer").length,
+    rejected: jobs.filter(job => job.status === "Rejected").length,
+    avgSalary: jobs.filter(job => job.salary && !isNaN(Number(job.salary)))
+      .reduce((sum, job) => sum + Number(job.salary), 0) / 
+      Math.max(jobs.filter(job => job.salary && !isNaN(Number(job.salary))).length, 1)
+  };
+
   return (
     <div className="h-screen overflow-hidden flex items-center justify-center p-6" style={{ backgroundColor: '#333333' }}>
       <button onClick={logout} className="absolute top-4 right-4 px-4 py-2 rounded-lg bg-gradient-to-br from-red-500/30 to-red-600/30 backdrop-blur-md border border-white/30 text-white font-bold shadow-[0_0_10px_rgba(255,255,255,0.3)] hover:shadow-[0_0_20px_rgba(255,0,0,0.5)] transition cursor-pointer z-50" aria-label="Logout">
@@ -208,32 +282,134 @@ export default function Home() {
         {error && !loading && <div className="mb-4 text-center text-red-400 font-semibold animate-pulse">{error}</div>}
         {loading && <div className="mb-4 text-center text-cyan-400 font-semibold animate-pulse">Loading...</div>}
 
-        {/* Form Section */}
-        <form className="grid md:grid-cols-4 gap-4 items-start mb-10 w-full" onSubmit={e => { e.preventDefault(); handleAddJob(); }}>
-          <input name="company" placeholder="Company" value={form.company} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Company" required />
-          <input name="role" placeholder="Job Title" value={form.role} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Job Title" required />
-          <input name="link" placeholder="Job Link (optional)" value={form.link} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Job Link" />
-          <button type="submit" disabled={loading} className={`w-full px-5 py-3 rounded-lg bg-gradient-to-br from-cyan-500/30 to-fuchsia-500/30 backdrop-blur-md border border-white/30 text-white font-bold shadow-[0_0_10px_rgba(255,255,255,0.3)] hover:shadow-[0_0_20px_rgba(0,255,255,0.5)] transition cursor-pointer ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-            aria-label={editId ? "Save Changes" : "Add Job"}>
-            {editId ? "💾 Save Changes" : "➕ Add Job"}
-          </button>
-          <div className="col-span-4">
-            <textarea name="notes" placeholder="Notes (e.g., interview tips, HR contact)" value={form.notes} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Notes" />
+        {/* Advanced Search and Filter */}
+        <div className="mb-6 p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/20">
+          <div className="flex flex-wrap gap-4 items-center">
+            <div className="flex-1 min-w-[200px]">
+              <input
+                type="text"
+                placeholder="🔍 Search jobs by company, role, or notes..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              />
+            </div>
+            <select
+              value={filterStatus}
+              onChange={(e) => setFilterStatus(e.target.value)}
+              className="px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
+            >
+              <option value="all" className="bg-gray-800">All Status</option>
+              <option value="Applied" className="bg-gray-800">Applied</option>
+              <option value="Interviewing" className="bg-gray-800">Interviewing</option>
+              <option value="Offer" className="bg-gray-800">Offer</option>
+              <option value="Rejected" className="bg-gray-800">Rejected</option>
+            </select>
+            <button
+              onClick={() => setShowStats(!showStats)}
+              className="px-4 py-2 rounded-lg bg-gradient-to-br from-purple-500/30 to-pink-500/30 backdrop-blur-md border border-white/30 text-white font-bold hover:shadow-[0_0_20px_rgba(147,51,234,0.5)] transition cursor-pointer"
+            >
+              📊 Stats
+            </button>
           </div>
-        </form>
+        </div>
+
+        {/* Statistics Dashboard */}
+        {showStats && (
+          <div className="mb-6 p-6 rounded-xl bg-white/5 backdrop-blur-sm border border-white/20">
+            <h3 className="text-xl font-bold text-white mb-4 flex items-center">
+              <span className="mr-2">📈</span>
+              Application Statistics
+            </h3>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
+              <div className="bg-white/10 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-cyan-400">{stats.total}</div>
+                <div className="text-white/70 text-sm">Total</div>
+              </div>
+              <div className="bg-white/10 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-blue-400">{stats.applied}</div>
+                <div className="text-white/70 text-sm">Applied</div>
+              </div>
+              <div className="bg-white/10 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-yellow-400">{stats.interviewing}</div>
+                <div className="text-white/70 text-sm">Interviewing</div>
+              </div>
+              <div className="bg-white/10 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-green-400">{stats.offers}</div>
+                <div className="text-white/70 text-sm">Offers</div>
+              </div>
+              <div className="bg-white/10 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-red-400">{stats.rejected}</div>
+                <div className="text-white/70 text-sm">Rejected</div>
+              </div>
+            </div>
+            {stats.avgSalary > 0 && (
+              <div className="mt-4 text-center">
+                <div className="text-lg text-white">💰 Average Salary: <span className="font-bold text-green-400">${stats.avgSalary.toLocaleString()}</span></div>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Form Section */}
+        <div className="mb-10">
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-xl font-bold text-white">Add New Application</h2>
+            <button
+              onClick={() => setShowAdvancedForm(!showAdvancedForm)}
+              className="px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white hover:bg-white/20 transition cursor-pointer"
+            >
+              {showAdvancedForm ? "🔽" : "🔼"} Advanced
+            </button>
+          </div>
+          
+          <form className="grid md:grid-cols-4 gap-4 items-start" onSubmit={e => { e.preventDefault(); handleAddJob(); }}>
+            <input name="company" placeholder="Company" value={form.company} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Company" required />
+            <input name="role" placeholder="Job Title" value={form.role} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Job Title" required />
+            <input name="link" placeholder="Job Link (optional)" value={form.link} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Job Link" />
+            <button type="submit" disabled={loading} className={`w-full px-5 py-3 rounded-lg bg-gradient-to-br from-cyan-500/30 to-fuchsia-500/30 backdrop-blur-md border border-white/30 text-white font-bold shadow-[0_0_10px_rgba(255,255,255,0.3)] hover:shadow-[0_0_20px_rgba(0,255,255,0.5)] transition cursor-pointer ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
+              aria-label={editId ? "Save Changes" : "Add Job"}>
+              {editId ? "💾 Save Changes" : "➕ Add Job"}
+            </button>
+            
+            {showAdvancedForm && (
+              <>
+                <input name="salary" placeholder="💰 Expected Salary" value={form.salary} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Salary" />
+                <input name="interviewDate" type="datetime-local" placeholder="📅 Interview Date" value={form.interviewDate} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Interview Date" />
+                <textarea name="companyResearch" placeholder="🏢 Company Research Notes" value={form.companyResearch} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Company Research" />
+                <select name="applicationTemplate" value={form.applicationTemplate} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Application Template">
+                  <option value="" className="bg-gray-800">📝 Select Template</option>
+                  <option value="software-engineer" className="bg-gray-800">Software Engineer</option>
+                  <option value="product-manager" className="bg-gray-800">Product Manager</option>
+                  <option value="data-scientist" className="bg-gray-800">Data Scientist</option>
+                  <option value="designer" className="bg-gray-800">Designer</option>
+                  <option value="marketing" className="bg-gray-800">Marketing</option>
+                  <option value="sales" className="bg-gray-800">Sales</option>
+                  <option value="custom" className="bg-gray-800">Custom</option>
+                </select>
+              </>
+            )}
+            
+            <div className="col-span-6">
+              <textarea name="notes" placeholder="Notes (e.g., interview tips, HR contact)" value={form.notes} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Notes" />
+            </div>
+          </form>
+        </div>
 
         {/* Job Status Columns */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-6 w-full">
           {statuses.map(status => {
-            const filteredJobs = jobs.filter(job => job.status === status);
+            const statusJobs = filteredJobs.filter(job => job.status === status);
             return (
               <div key={status} className={`p-4 rounded-xl border border-base-200 shadow-sm w-full flex flex-col bg-white/10 transition-all duration-200 ${draggedJobId ? 'ring-2 ring-cyan-400' : ''}`}
                 onDragOver={onDragOver}
                 onDrop={(e) => onDrop(e, status)}
                 aria-label={status + ' jobs'}>
-                <h2 className="text-xl font-bold text-white mb-4 border-b pb-2 border-white/30">{status}</h2>
+                <h2 className="text-xl font-bold text-white mb-4 border-b pb-2 border-white/30">
+                  {status} ({statusJobs.length})
+                </h2>
                 <div className="flex flex-col gap-3">
-                  {filteredJobs.map(job => (
+                  {statusJobs.map(job => (
                     <div
                       key={job.id}
                       className={`relative border border-gray-300 rounded-lg p-4 space-y-2 hover:shadow-md transition w-full bg-white ${job.status === 'Rejected' ? 'opacity-50' : ''} ${draggedJobId === job.id ? 'ring-2 ring-fuchsia-400' : ''}`}
@@ -276,13 +452,38 @@ export default function Home() {
                               >
                                 🗑️ Delete
                               </button>
+                              {job.interviewDate && (
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const date = new Date(job.interviewDate!);
+                                    alert(`📅 Interview scheduled for ${date.toLocaleString()}`);
+                                  }} 
+                                  className="px-3 py-1 text-sm text-blue-600 text-left hover:bg-blue-50 rounded cursor-pointer" 
+                                  aria-label="View Interview"
+                                >
+                                  📅 Interview
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
                       </div>
                       <div className="text-sm text-gray-600 break-words">{job.company}</div>
+                      {job.salary && (
+                        <div className="text-sm text-green-600 font-semibold">💰 ${Number(job.salary).toLocaleString()}</div>
+                      )}
+                      {job.interviewDate && (
+                        <div className="text-sm text-blue-600">📅 {new Date(job.interviewDate).toLocaleDateString()}</div>
+                      )}
                       {job.link && (
                         <a href={job.link} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline break-words" aria-label="View job link">View Job</a>
+                      )}
+                      {job.companyResearch && (
+                        <div className="text-xs text-purple-600 italic break-words">🏢 {job.companyResearch}</div>
+                      )}
+                      {job.applicationTemplate && (
+                        <div className="text-xs text-orange-600">📝 Template: {job.applicationTemplate}</div>
                       )}
                       {job.notes && (
                         <div className="text-xs text-gray-500 italic break-words">{job.notes}</div>
