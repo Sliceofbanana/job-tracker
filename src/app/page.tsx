@@ -71,7 +71,10 @@ export default function Home() {
           .map((doc) => ({ id: doc.id, ...(doc.data() as Omit<JobEntry, "id">) }))
           .filter((job) => job.uid === user.uid);
         setJobs(jobsData);
-      } catch {
+        setError(null); // Clear any previous errors on successful fetch
+      } catch (error) {
+        console.error("Error fetching jobs:", error);
+        // Only show error for actual failures, not empty results
         setError("Failed to fetch jobs. Please try again.");
       } finally {
         setLoading(false);
@@ -224,7 +227,7 @@ export default function Home() {
         <h1 className="text-4xl font-extrabold text-white mb-8 text-center">🎯 Job Application Tracker</h1>
 
         {/* Error and Loading Feedback */}
-        {error && <div className="mb-4 text-center text-red-400 font-semibold animate-pulse">{error}</div>}
+        {error && !loading && <div className="mb-4 text-center text-red-400 font-semibold animate-pulse">{error}</div>}
         {loading && <div className="mb-4 text-center text-cyan-400 font-semibold animate-pulse">Loading...</div>}
 
         {/* Form Section */}
