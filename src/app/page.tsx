@@ -216,11 +216,7 @@ export default function Home() {
         <div className="absolute top-0 right-0 w-36 h-36 bg-cyan-400/30 rounded-full blur-[80px] border-t-2 border-r-2 border-cyan-300/40 pointer-events-none" style={{ transform: 'translate(50%, -50%)' }} />
         <div className="absolute bottom-0 left-0 w-36 h-36 bg-fuchsia-500/30 rounded-full blur-[80px] border-b-2 border-l-2 border-fuchsia-400/40 pointer-events-none" style={{ transform: 'translate(-50%, 50%)' }} />
 
-        <h1 className="text-4xl font-extrabold mb-8 text-center text-primary">🎯 Job Application Tracker</h1>
-
-        {/* Error and Loading Feedback */}
-        {error && <div className="mb-4 text-center text-red-400 font-semibold animate-pulse">{error}</div>}
-        {loading && <div className="mb-4 text-center text-cyan-400 font-semibold animate-pulse">Loading...</div>}
+        <h1 className="text-4xl font-extrabold text-white mb-8 text-center text-primary">🎯 Job Application Tracker</h1>
 
         {/* Form Section */}
         <form className="grid md:grid-cols-4 gap-4 items-start mb-10 w-full" onSubmit={e => { e.preventDefault(); handleAddJob(); }}>
@@ -276,12 +272,12 @@ export default function Home() {
                           )}
                         </div>
                       </div>
-                      <div className="text-sm text-base-content/70 break-words">{job.company}</div>
+                      <div className="text-sm text-white text-base-content/70 break-words">{job.company}</div>
                       {job.link && (
                         <a href={job.link} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-500 hover:underline break-words" aria-label="View job link">View Job</a>
                       )}
                       {job.notes && (
-                        <div className="text-xs text-base-content/60 italic break-words">{job.notes}</div>
+                        <div className="text-xs text-white text-base-content/60 italic break-words">{job.notes}</div>
                       )}
                     </div>
                   ))}
