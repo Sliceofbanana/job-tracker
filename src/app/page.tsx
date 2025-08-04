@@ -216,7 +216,7 @@ export default function Home() {
       <button onClick={logout} className="absolute top-4 right-4 px-4 py-2 rounded-lg bg-gradient-to-br from-red-500/30 to-red-600/30 backdrop-blur-md border border-white/30 text-white font-bold shadow-[0_0_10px_rgba(255,255,255,0.3)] hover:shadow-[0_0_20px_rgba(255,0,0,0.5)] transition cursor-pointer z-50" aria-label="Logout">
         🚪 Logout
       </button>
-      <div className="relative w-full max-w-7xl p-8 rounded-2xl backdrop-blur-md bg-white/5 border border-white/20 overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.1),_0_0_50px_0_rgba(0,255,255,0.2)_inset,_0_0_50px_0_rgba(255,0,255,0.2)_inset]">
+      <div className="relative w-full max-w-7xl p-8 rounded-2xl backdrop-blur-md bg-gradient-to-br from-purple-600 to-blue-700 border border-white/20 overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.1),_0_0_50px_0_rgba(0,255,255,0.2)_inset,_0_0_50px_0_rgba(255,0,255,0.2)_inset]">
         {/* Neon corners */}
         <div className="absolute top-0 right-0 w-36 h-36 bg-cyan-400/30 rounded-full blur-[80px] border-t-2 border-r-2 border-cyan-300/40 pointer-events-none" style={{ transform: 'translate(50%, -50%)' }} />
         <div className="absolute bottom-0 left-0 w-36 h-36 bg-fuchsia-500/30 rounded-full blur-[80px] border-b-2 border-l-2 border-fuchsia-400/40 pointer-events-none" style={{ transform: 'translate(-50%, 50%)' }} />
