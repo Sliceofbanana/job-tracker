@@ -12,6 +12,9 @@ import {
   updateDoc,
   doc,
   Timestamp,
+  query,
+  where,
+  orderBy,
 } from "firebase/firestore";
 import { db } from "./firebase";
 
@@ -119,6 +122,8 @@ export default function Home() {
   const [filterStatus, setFilterStatus] = useState<string>("all");
   const [showStats, setShowStats] = useState(false);
   const [showAdvancedForm, setShowAdvancedForm] = useState(false);
+  const [showCongratulationModal, setShowCongratulationModal] = useState(false);
+  const [congratulationMessage, setCongratulationMessage] = useState("");
 
   // Rate limiting helper
   const isRateLimited = (): boolean => {
@@ -152,6 +157,36 @@ export default function Home() {
   if (!user) {
     return <Login onLogin={login} />;
   }
+
+  // Fetch jobs when user logs in
+  useEffect(() => {
+    const fetchJobs = async () => {
+      if (!user) return;
+      
+      setLoading(true);
+      setError(null);
+      try {
+        const q = query(
+          collection(db, "jobs"),
+          where("uid", "==", user.uid),
+          orderBy("createdAt", "desc")
+        );
+        const querySnapshot = await getDocs(q);
+        const jobsData = querySnapshot.docs.map(doc => ({
+          id: doc.id,
+          ...doc.data()
+        })) as JobEntry[];
+        setJobs(jobsData);
+      } catch (err) {
+        console.error("Error fetching jobs:", err);
+        setError("Failed to load your jobs. Please refresh the page.");
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchJobs();
+  }, [user]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
@@ -277,7 +312,8 @@ export default function Home() {
       // Show congratulations message if moved to Offer status
       if (newStatus === "Offer" && oldStatus !== "Offer") {
         const randomQuote = congratulationQuotes[Math.floor(Math.random() * congratulationQuotes.length)];
-        alert(randomQuote);
+        setCongratulationMessage(randomQuote);
+        setShowCongratulationModal(true);
       }
     } catch {
       setError("Failed to update job status. Please try again.");
@@ -316,38 +352,39 @@ export default function Home() {
   };
 
   return (
-    <div className="h-screen overflow-hidden flex items-center justify-center p-6" style={{ backgroundColor: '#333333' }}>
+    <div className="min-h-screen overflow-x-hidden flex items-center justify-center p-2 sm:p-4 lg:p-6" style={{ backgroundColor: '#333333' }}>
       <Analytics />
-      <button onClick={logout} className="absolute top-4 right-4 px-6 py-3 rounded-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-red-400/50 z-50" aria-label="Logout">
-        🚪 Logout
+      <button onClick={logout} className="absolute top-2 right-2 sm:top-4 sm:right-4 px-3 py-2 sm:px-6 sm:py-3 rounded-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold text-sm sm:text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-red-400/50 z-50" aria-label="Logout">
+        <span className="hidden sm:inline">🚪 Logout</span>
+        <span className="sm:hidden">🚪</span>
       </button>
-      <div className="relative w-full max-w-7xl p-8 rounded-2xl backdrop-blur-md bg-gradient-to-br from-purple-600 to-blue-700 border border-white/20 overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.1),_0_0_50px_0_rgba(0,255,255,0.2)_inset,_0_0_50px_0_rgba(255,0,255,0.2)_inset]">
+      <div className="relative w-full max-w-7xl p-4 sm:p-6 lg:p-8 rounded-2xl backdrop-blur-md bg-gradient-to-br from-purple-600 to-blue-700 border border-white/20 overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.1),_0_0_50px_0_rgba(0,255,255,0.2)_inset,_0_0_50px_0_rgba(255,0,255,0.2)_inset]">
         {/* Neon corners */}
-        <div className="absolute top-0 right-0 w-36 h-36 bg-cyan-400/30 rounded-full blur-[80px] border-t-2 border-r-2 border-cyan-300/40 pointer-events-none" style={{ transform: 'translate(50%, -50%)' }} />
-        <div className="absolute bottom-0 left-0 w-36 h-36 bg-fuchsia-500/30 rounded-full blur-[80px] border-b-2 border-l-2 border-fuchsia-400/40 pointer-events-none" style={{ transform: 'translate(-50%, 50%)' }} />
+        <div className="absolute top-0 right-0 w-24 h-24 sm:w-36 sm:h-36 bg-cyan-400/30 rounded-full blur-[60px] sm:blur-[80px] border-t-2 border-r-2 border-cyan-300/40 pointer-events-none" style={{ transform: 'translate(50%, -50%)' }} />
+        <div className="absolute bottom-0 left-0 w-24 h-24 sm:w-36 sm:h-36 bg-fuchsia-500/30 rounded-full blur-[60px] sm:blur-[80px] border-b-2 border-l-2 border-fuchsia-400/40 pointer-events-none" style={{ transform: 'translate(-50%, 50%)' }} />
 
-        <h1 className="text-4xl font-extrabold text-white mb-8 text-center">🎯 Job Application Tracker</h1>
+        <h1 className="text-2xl sm:text-3xl lg:text-4xl font-extrabold text-white mb-4 sm:mb-6 lg:mb-8 text-center px-2">🎯 Job Application Tracker</h1>
 
         {/* Error and Loading Feedback */}
         {error && !loading && <div className="mb-4 text-center text-red-400 font-semibold animate-pulse">{error}</div>}
         {loading && <div className="mb-4 text-center text-cyan-400 font-semibold animate-pulse">Loading...</div>}
 
         {/* Advanced Search and Filter */}
-        <div className="mb-6 p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/20">
-          <div className="flex flex-wrap gap-4 items-center">
+        <div className="mb-4 sm:mb-6 p-3 sm:p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/20">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 items-stretch sm:items-center">
             <div className="flex-1 min-w-[200px]">
               <input
                 type="text"
                 placeholder="🔍 Search jobs by company, role, or notes..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                className="w-full px-3 sm:px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-sm sm:text-base"
               />
             </div>
             <select
               value={filterStatus}
               onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
+              className="px-3 sm:px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400 text-sm sm:text-base"
             >
               <option value="all" className="bg-gray-800">All Status</option>
               <option value="Applied" className="bg-gray-800">Applied</option>
@@ -357,7 +394,7 @@ export default function Home() {
             </select>
             <button
               onClick={() => setShowStats(!showStats)}
-              className="px-6 py-3 rounded-lg bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-purple-400/50"
+              className="px-4 sm:px-6 py-2 sm:py-3 rounded-lg bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-purple-400/50 text-sm sm:text-base"
             >
               📊 Stats
             </button>
@@ -366,68 +403,66 @@ export default function Home() {
 
         {/* Statistics Dashboard */}
         {showStats && (
-          <div className="mb-6 p-6 rounded-xl bg-white/5 backdrop-blur-sm border border-white/20">
-            <h3 className="text-xl font-bold text-white mb-4 flex items-center">
-              <span className="mr-2">📈</span>
-              Application Statistics
-            </h3>
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div className="bg-white/10 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-cyan-400">{stats.total}</div>
-                <div className="text-white/70 text-sm">Total</div>
+          <div className="mb-4 sm:mb-6 p-3 sm:p-6 rounded-xl bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-md border border-white/20">
+            <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-cyan-300 mb-3 sm:mb-4">� Application Statistics</h3>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
+              <div className="text-center p-3 sm:p-4 rounded-lg bg-white/10">
+                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-blue-300">{stats.total}</div>
+                <div className="text-xs sm:text-sm text-gray-300">Total</div>
               </div>
-              <div className="bg-white/10 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-blue-400">{stats.applied}</div>
-                <div className="text-white/70 text-sm">Applied</div>
+              <div className="text-center p-3 sm:p-4 rounded-lg bg-white/10">
+                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-yellow-300">{stats.applied}</div>
+                <div className="text-xs sm:text-sm text-gray-300">Applied</div>
               </div>
-              <div className="bg-white/10 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-yellow-400">{stats.interviewing}</div>
-                <div className="text-white/70 text-sm">Interviewing</div>
+              <div className="text-center p-3 sm:p-4 rounded-lg bg-white/10">
+                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-orange-300">{stats.interviewing}</div>
+                <div className="text-xs sm:text-sm text-gray-300">Interviewing</div>
               </div>
-              <div className="bg-white/10 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-green-400">{stats.offers}</div>
-                <div className="text-white/70 text-sm">Offers</div>
+              <div className="text-center p-3 sm:p-4 rounded-lg bg-white/10">
+                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-300">{stats.offers}</div>
+                <div className="text-xs sm:text-sm text-gray-300">Offers</div>
               </div>
-              <div className="bg-white/10 rounded-lg p-4 text-center">
-                <div className="text-2xl font-bold text-red-400">{stats.rejected}</div>
-                <div className="text-white/70 text-sm">Rejected</div>
+              <div className="text-center p-3 sm:p-4 rounded-lg bg-white/10 col-span-2 sm:col-span-1">
+                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-red-300">{stats.rejected}</div>
+                <div className="text-xs sm:text-sm text-gray-300">Rejected</div>
               </div>
             </div>
             {stats.avgSalary > 0 && (
-              <div className="mt-4 text-center">
-                <div className="text-lg text-white">💰 Average Salary: <span className="font-bold text-green-400">${stats.avgSalary.toLocaleString()}</span></div>
+              <div className="mt-3 sm:mt-4 p-3 sm:p-4 rounded-lg bg-gradient-to-r from-green-800/50 to-emerald-800/50">
+                <div className="text-center">
+                  <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-300">${stats.avgSalary.toLocaleString()}</div>
+                  <div className="text-xs sm:text-sm text-gray-300">Average Expected Salary</div>
+                </div>
               </div>
             )}
           </div>
-        )}
-
-        {/* Form Section */}
-        <div className="mb-10">
-          <div className="flex justify-between items-center mb-4">
-            <h2 className="text-xl font-bold text-white">Add New Application</h2>
+        )}        {/* Form Section */}
+        <div className="mb-6 sm:mb-10">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 sm:mb-4 gap-2 sm:gap-0">
+            <h2 className="text-lg sm:text-xl font-bold text-white">Add New Application</h2>
             <button
               onClick={() => setShowAdvancedForm(!showAdvancedForm)}
-              className="px-6 py-3 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-blue-400/50"
+              className="px-4 sm:px-6 py-2 sm:py-3 rounded-lg bg-gradient-to-r from-blue-500 to-blue-600 hover:from-blue-600 hover:to-blue-700 text-white font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-blue-400/50 text-sm sm:text-base"
             >
               {showAdvancedForm ? "🔽" : "🔼"} Advanced
             </button>
           </div>
           
-          <form className="space-y-4" onSubmit={e => { e.preventDefault(); handleAddJob(); }}>
+          <form className="space-y-3 sm:space-y-4" onSubmit={e => { e.preventDefault(); handleAddJob(); }}>
             {/* Main form row */}
-            <div className="grid md:grid-cols-3 gap-4 items-center">
-              <input name="company" placeholder="Company" value={form.company} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Company" required />
-              <input name="role" placeholder="Job Title" value={form.role} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Job Title" required />
-              <input name="link" placeholder="Job Link (optional)" value={form.link} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Job Link" />
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 items-center">
+              <input name="company" placeholder="Company" value={form.company} onChange={handleChange} className="w-full px-3 sm:px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-sm sm:text-base" aria-label="Company" required />
+              <input name="role" placeholder="Job Title" value={form.role} onChange={handleChange} className="w-full px-3 sm:px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-sm sm:text-base" aria-label="Job Title" required />
+              <input name="link" placeholder="Job Link (optional)" value={form.link} onChange={handleChange} className="w-full px-3 sm:px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-sm sm:text-base sm:col-span-2 lg:col-span-1" aria-label="Job Link" />
             </div>
             
             {/* Advanced form fields */}
             {showAdvancedForm && (
-              <div className="grid md:grid-cols-4 gap-4 items-center">
-                <input name="salary" placeholder="💰 Expected Salary" value={form.salary} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Salary" />
-                <input name="interviewDate" type="datetime-local" placeholder="📅 Interview Date" value={form.interviewDate} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Interview Date" />
-                <textarea name="companyResearch" placeholder="🏢 Company Research Notes" value={form.companyResearch} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400 resize-none" rows={1} aria-label="Company Research" />
-                <select name="applicationTemplate" value={form.applicationTemplate} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Application Template">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-4 items-center">
+                <input name="salary" placeholder="💰 Expected Salary" value={form.salary} onChange={handleChange} className="w-full px-3 sm:px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-sm sm:text-base" aria-label="Salary" />
+                <input name="interviewDate" type="datetime-local" placeholder="📅 Interview Date" value={form.interviewDate} onChange={handleChange} className="w-full px-3 sm:px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-sm sm:text-base" aria-label="Interview Date" />
+                <textarea name="companyResearch" placeholder="🏢 Company Research Notes" value={form.companyResearch} onChange={handleChange} className="w-full px-3 sm:px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400 resize-none text-sm sm:text-base" rows={1} aria-label="Company Research" />
+                <select name="applicationTemplate" value={form.applicationTemplate} onChange={handleChange} className="w-full px-3 sm:px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400 text-sm sm:text-base" aria-label="Application Template">
                   <option value="" className="bg-gray-800">📝 Select Template</option>
                   <option value="software-engineer" className="bg-gray-800">Software Engineer</option>
                   <option value="product-manager" className="bg-gray-800">Product Manager</option>
@@ -442,12 +477,12 @@ export default function Home() {
             
             {/* Notes field - full width */}
             <div className="w-full">
-              <textarea name="notes" placeholder="Notes (e.g., interview tips, HR contact)" value={form.notes} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400 resize-none" rows={2} aria-label="Notes" />
+              <textarea name="notes" placeholder="Notes (e.g., interview tips, HR contact)" value={form.notes} onChange={handleChange} className="w-full px-3 sm:px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400 resize-none text-sm sm:text-base" rows={2} aria-label="Notes" />
             </div>
 
-            {/* Submit Button - right aligned */}
-            <div className="flex justify-end">
-              <button type="submit" disabled={loading} className={`px-8 py-3 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-green-400/50 ${loading ? 'opacity-50 cursor-not-allowed transform-none' : 'cursor-pointer'}`}
+            {/* Submit Button - responsive alignment */}
+            <div className="flex justify-center sm:justify-end">
+              <button type="submit" disabled={loading} className={`w-full sm:w-auto px-6 sm:px-8 py-2 sm:py-3 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold text-base sm:text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-green-400/50 ${loading ? 'opacity-50 cursor-not-allowed transform-none' : 'cursor-pointer'}`}
                 aria-label={editId ? "Save Changes" : "Add Job"}>
                 {editId ? "💾 Save Changes" : "➕ Add Job"}
               </button>
@@ -456,37 +491,37 @@ export default function Home() {
         </div>
 
         {/* Separator Line */}
-        <div className="mb-8 w-full h-px bg-gradient-to-r from-transparent via-white/30 to-transparent"></div>
+        <div className="mb-6 sm:mb-8 w-full h-px bg-gradient-to-r from-transparent via-white/30 to-transparent"></div>
 
         {/* Job Status Columns */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 w-full">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 sm:gap-6 w-full">
           {statuses.map(status => {
             const statusJobs = filteredJobs.filter(job => job.status === status);
             return (
-              <div key={status} className={`p-4 rounded-xl border border-base-200 shadow-sm w-full flex flex-col bg-white/10 transition-all duration-200 ${draggedJobId ? 'ring-2 ring-cyan-400' : ''}`}
+              <div key={status} className={`p-3 sm:p-4 rounded-xl border border-base-200 shadow-sm w-full flex flex-col bg-white/10 transition-all duration-200 ${draggedJobId ? 'ring-2 ring-cyan-400' : ''}`}
                 onDragOver={onDragOver}
                 onDrop={(e) => onDrop(e, status)}
                 aria-label={status + ' jobs'}>
-                <h2 className="text-xl font-bold text-white mb-4 border-b pb-2 border-white/30">
+                <h2 className="text-lg sm:text-xl font-bold text-white mb-3 sm:mb-4 border-b pb-2 border-white/30">
                   {status} ({statusJobs.length})
                 </h2>
-                <div className="flex flex-col gap-3">
+                <div className="flex flex-col gap-2 sm:gap-3">
                   {statusJobs.map(job => (
                     <div
                       key={job.id}
-                      className={`relative border border-gray-300 rounded-lg p-4 space-y-2 hover:shadow-md transition w-full bg-white ${job.status === 'Rejected' ? 'opacity-50' : ''} ${draggedJobId === job.id ? 'ring-2 ring-fuchsia-400' : ''}`}
+                      className={`relative border border-gray-300 rounded-lg p-3 sm:p-4 space-y-2 hover:shadow-md transition w-full bg-white ${job.status === 'Rejected' ? 'opacity-50' : ''} ${draggedJobId === job.id ? 'ring-2 ring-fuchsia-400' : ''}`}
                       draggable
                       onDragStart={(e) => onDragStart(e, job.id)}
                       onDragEnd={() => setDraggedJobId(null)}
                       aria-grabbed={draggedJobId === job.id}
                     >
                       <div className="flex justify-between items-start">
-                        <div className={`text-lg break-words font-bold ${job.status === 'Offer' ? 'text-green-600' : job.status === 'Rejected' ? 'text-red-600' : 'text-gray-800'}`}>{job.role}</div>
+                        <div className={`text-base sm:text-lg break-words font-bold ${job.status === 'Offer' ? 'text-green-600' : job.status === 'Rejected' ? 'text-red-600' : 'text-gray-800'}`}>{job.role}</div>
                         {/* 3-dot dropdown */}
                         <div className="relative">
                           <button
                             onClick={() => setOpenMenuId(openMenuId === job.id ? null : job.id)}
-                            className="text-xl text-gray-600 hover:text-gray-800 cursor-pointer"
+                            className="text-lg sm:text-xl text-gray-600 hover:text-gray-800 cursor-pointer p-1"
                             aria-label="Open job menu"
                             tabIndex={0}
                           >
@@ -546,15 +581,15 @@ export default function Home() {
                           )}
                         </div>
                       </div>
-                      <div className="text-sm text-gray-600 break-words">{job.company}</div>
+                      <div className="text-xs sm:text-sm text-gray-600 break-words">{job.company}</div>
                       {job.salary && (
-                        <div className="text-sm text-green-600 font-semibold">💰 ${Number(job.salary).toLocaleString()}</div>
+                        <div className="text-xs sm:text-sm text-green-600 font-semibold">💰 ${Number(job.salary).toLocaleString()}</div>
                       )}
                       {job.interviewDate && (
-                        <div className="text-sm text-blue-600">📅 {new Date(job.interviewDate).toLocaleDateString()}</div>
+                        <div className="text-xs sm:text-sm text-blue-600">📅 {new Date(job.interviewDate).toLocaleDateString()}</div>
                       )}
                       {job.link && (
-                        <a href={job.link} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 hover:underline break-words" aria-label="View job link">View Job</a>
+                        <a href={job.link} target="_blank" rel="noopener noreferrer" className="text-xs sm:text-sm text-blue-600 hover:underline break-words" aria-label="View job link">View Job</a>
                       )}
                       {job.companyResearch && (
                         <div className="text-xs text-purple-600 italic break-words">🏢 {job.companyResearch}</div>
@@ -581,6 +616,36 @@ export default function Home() {
           })}
         </div>
       </div>
+
+      {/* Congratulations Modal */}
+      {showCongratulationModal && (
+        <div className="modal modal-open">
+          <div className="modal-box relative bg-gradient-to-br from-green-400 to-emerald-500 text-white border-4 border-green-300 shadow-2xl max-w-xs sm:max-w-md mx-4">
+            <button 
+              className="btn btn-sm btn-circle absolute right-2 top-2 bg-white/20 hover:bg-white/30 border-none text-white"
+              onClick={() => setShowCongratulationModal(false)}
+            >
+              ✕
+            </button>
+            <div className="text-center py-6 sm:py-8">
+              <div className="text-4xl sm:text-6xl mb-3 sm:mb-4">🎉</div>
+              <h3 className="font-bold text-xl sm:text-2xl mb-3 sm:mb-4">Congratulations!</h3>
+              <p className="text-base sm:text-lg leading-relaxed px-2 sm:px-4">
+                {congratulationMessage.replace(/^🎉|🌟|🚀|💪|🎊|✨|🏆|🎯|🌈|💎|🔥|⭐\s*/, '')}
+              </p>
+              <div className="modal-action justify-center mt-6 sm:mt-8">
+                <button 
+                  className="btn bg-white text-green-600 hover:bg-green-50 border-none font-bold px-6 sm:px-8 text-sm sm:text-base"
+                  onClick={() => setShowCongratulationModal(false)}
+                >
+                  Thank you! 🙏
+                </button>
+              </div>
+            </div>
+          </div>
+          <div className="modal-backdrop bg-black/50" onClick={() => setShowCongratulationModal(false)}></div>
+        </div>
+      )}
     </div>
   );
 }
