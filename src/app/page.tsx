@@ -153,11 +153,6 @@ export default function Home() {
     }
   }, [openMenuId]);
 
-  // Return login prompt after hooks
-  if (!user) {
-    return <Login onLogin={login} />;
-  }
-
   // Fetch jobs when user logs in
   useEffect(() => {
     const fetchJobs = async () => {
@@ -187,6 +182,11 @@ export default function Home() {
 
     fetchJobs();
   }, [user]);
+
+  // Return login prompt after hooks
+  if (!user) {
+    return <Login onLogin={login} />;
+  }
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
