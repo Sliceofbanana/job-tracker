@@ -239,16 +239,16 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 ## 🗺️ **Roadmap**
 
 ### Short Term
-- [ ] Email notifications for interview reminders
+- [✔] Email notifications for interview reminders
 - [ ] Export applications to CSV/PDF
-- [ ] Advanced filtering and search
-- [ ] Application statistics dashboard
+- [✔] Advanced filtering and search
+- [✔] Application statistics dashboard
 
 ### Medium Term
-- [ ] Calendar integration
-- [ ] Company research notes
-- [ ] Salary tracking
-- [ ] Application templates
+- [✔] Calendar integration
+- [✔] Company research notes
+- [✔] Salary tracking
+- [✔] Application templates
 
 ### Long Term
 - [ ] Mobile app (React Native)
