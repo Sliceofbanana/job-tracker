@@ -60,28 +60,6 @@ export default function Home() {
     return false;
   };
 
-  useEffect(() => {
-    if (!user) return;
-    setLoading(true);
-    setError(null);
-    (async () => {
-      try {
-        const jobSnapshot = await getDocs(collection(db, "jobs"));
-        const jobsData: JobEntry[] = jobSnapshot.docs
-          .map((doc) => ({ id: doc.id, ...(doc.data() as Omit<JobEntry, "id">) }))
-          .filter((job) => job.uid === user.uid);
-        setJobs(jobsData);
-        setError(null); // Clear any previous errors on successful fetch
-      } catch (error) {
-        console.error("Error fetching jobs:", error);
-        // Only show error for actual failures, not empty results
-        setError("Failed to fetch jobs. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [user]);
-
   // Close menu when clicking outside
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
