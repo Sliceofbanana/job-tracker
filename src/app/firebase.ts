@@ -3,13 +3,13 @@ import { getFirestore } from "firebase/firestore";
 import { getAuth, GoogleAuthProvider } from "firebase/auth";
 
 const firebaseConfig = {
-  apiKey: "AIzaSyD5zDLFRw-9RZBrC_4KCqHkuTrG1iKouKU",
-  authDomain: "job-tracker-169f2.firebaseapp.com",
-  projectId: "job-tracker-169f2",
-  storageBucket: "job-tracker-169f2.firebasestorage.app",
-  messagingSenderId: "371415396058",
-  appId: "1:371415396058:web:7e25ce794fed3bf1c77fe3",
-  measurementId: "G-HQ8ML32VE3"
+  apiKey: process.env.NEXT_PUBLIC_FIREBASE_API_KEY,
+  authDomain: process.env.NEXT_PUBLIC_FIREBASE_AUTH_DOMAIN,
+  projectId: process.env.NEXT_PUBLIC_FIREBASE_PROJECT_ID,
+  storageBucket: process.env.NEXT_PUBLIC_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: process.env.NEXT_PUBLIC_FIREBASE_MESSAGING_SENDER_ID,
+  appId: process.env.NEXT_PUBLIC_FIREBASE_APP_ID,
+  measurementId: process.env.NEXT_PUBLIC_FIREBASE_MEASUREMENT_ID
 };
 
 const app = initializeApp(firebaseConfig);

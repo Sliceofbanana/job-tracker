@@ -16,6 +16,16 @@ import { db } from "./firebase";
 
 const statuses = ["Applied", "Interviewing", "Offer", "Rejected"];
 
+// URL validation helper function
+const isValidUrl = (string: string): boolean => {
+  try {
+    const url = new URL(string);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch {
+    return false;
+  }
+};
+
 interface JobEntry {
   id: string;
   uid: string;
@@ -36,7 +46,20 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [draggedJobId, setDraggedJobId] = useState<string | null>(null);
+  const [lastActionTime, setLastActionTime] = useState(0);
   const menuRef = useRef<HTMLDivElement>(null);
+
+  // Rate limiting helper
+  const isRateLimited = (): boolean => {
+    const now = Date.now();
+    const timeDiff = now - lastActionTime;
+    if (timeDiff < 1000) { // 1 second rate limit
+      setError("Please wait before performing another action.");
+      return true;
+    }
+    setLastActionTime(now);
+    return false;
+  };
 
   useEffect(() => {
     if (!user) return;
@@ -78,21 +101,49 @@ export default function Home() {
   };
 
   const handleAddJob = async () => {
-    if (!form.company || !form.role) {
+    if (isRateLimited()) return;
+
+    // Input validation and sanitization
+    const sanitizedForm = {
+      company: form.company.trim(),
+      role: form.role.trim(),
+      link: form.link.trim(),
+      notes: form.notes.trim()
+    };
+
+    if (!sanitizedForm.company || !sanitizedForm.role) {
       setError("Company and Role are required.");
       return;
     }
+
+    // Validate URL if provided
+    if (sanitizedForm.link && !isValidUrl(sanitizedForm.link)) {
+      setError("Please provide a valid URL for the job link.");
+      return;
+    }
+
+    // Length validation
+    if (sanitizedForm.company.length > 100 || sanitizedForm.role.length > 100) {
+      setError("Company and Role must be less than 100 characters.");
+      return;
+    }
+
+    if (sanitizedForm.notes.length > 1000) {
+      setError("Notes must be less than 1000 characters.");
+      return;
+    }
+
     setLoading(true);
     setError(null);
     try {
       if (editId) {
         const jobRef = doc(db, "jobs", editId);
-        await updateDoc(jobRef, { ...form });
-        setJobs((prev) => prev.map(job => job.id === editId ? { ...job, ...form } : job));
+        await updateDoc(jobRef, { ...sanitizedForm });
+        setJobs((prev) => prev.map(job => job.id === editId ? { ...job, ...sanitizedForm } : job));
         setEditId(null);
       } else {
         const newJobData = {
-          ...form,
+          ...sanitizedForm,
           status: "Applied",
           uid: user.uid,
           createdAt: Timestamp.now(),
@@ -115,6 +166,8 @@ export default function Home() {
   };
 
   const handleDelete = async (id: string) => {
+    if (isRateLimited()) return;
+    
     setLoading(true);
     setError(null);
     try {
