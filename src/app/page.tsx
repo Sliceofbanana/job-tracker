@@ -85,29 +85,6 @@ export default function Home() {
     }
   }, [openMenuId]);
 
-  // Fetch jobs from Firebase
-  useEffect(() => {
-    if (!user) return;
-    setLoading(true);
-    setError(null);
-    (async () => {
-      try {
-        const jobSnapshot = await getDocs(collection(db, "jobs"));
-        const jobsData: JobEntry[] = jobSnapshot.docs
-          .map((doc) => ({ id: doc.id, ...(doc.data() as Omit<JobEntry, "id">) }))
-          .filter((job) => job.uid === user.uid);
-        setJobs(jobsData);
-        setError(null); // Clear any previous errors on successful fetch
-      } catch (error) {
-        console.error("Error fetching jobs:", error);
-        // Only show error for actual failures, not empty results
-        setError("Failed to fetch jobs. Please try again.");
-      } finally {
-        setLoading(false);
-      }
-    })();
-  }, [user]);
-
   // Return login prompt after hooks
   if (!user) {
     return <Login onLogin={login} />;
