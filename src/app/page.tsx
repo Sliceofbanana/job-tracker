@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "./authprovider";
 import Login from "./login";
+import { Analytics } from "@vercel/analytics/next"
 import {
   collection,
   getDocs,
@@ -316,6 +317,7 @@ export default function Home() {
 
   return (
     <div className="h-screen overflow-hidden flex items-center justify-center p-6" style={{ backgroundColor: '#333333' }}>
+      <Analytics />
       <button onClick={logout} className="absolute top-4 right-4 px-6 py-3 rounded-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-red-400/50 z-50" aria-label="Logout">
         🚪 Logout
       </button>
