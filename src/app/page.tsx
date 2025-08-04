@@ -16,6 +16,68 @@ import { db } from "./firebase";
 
 const statuses = ["Applied", "Interviewing", "Offer", "Rejected"];
 
+// Congratulatory quotes for job offers
+const congratulationQuotes = [
+  "🎉 Congratulations! Your hard work has paid off! This offer is well-deserved!",
+  "🌟 Amazing news! You've landed an offer! Time to celebrate your success!",
+  "🚀 Fantastic! You've secured an offer! Your skills and dedication shine through!",
+  "💪 Well done! This job offer proves your talent and perseverance!",
+  "🎊 Incredible achievement! You've earned this offer through your excellence!",
+  "✨ Outstanding! This offer is a testament to your capabilities and hard work!",
+  "🏆 Bravo! You've successfully navigated the process and secured an offer!",
+  "🎯 Bull's eye! Your preparation and skills have landed you this fantastic offer!",
+  "🌈 What wonderful news! This offer opens up exciting new possibilities for you!",
+  "💎 Excellent work! You've proven your worth and earned this amazing opportunity!",
+  "🔥 You're on fire! This job offer shows how impressive you truly are!",
+  "⭐ Superstar! Your talent has been recognized with this well-deserved offer!"
+];
+
+// Application templates with guidance
+const applicationTemplates = {
+  "software-engineer": {
+    name: "Software Engineer",
+    tips: "Focus on: Technical skills, coding projects, problem-solving abilities, and system design experience.",
+    keySkills: ["Programming Languages", "Data Structures", "System Design", "Version Control", "Testing"],
+    coverLetterHint: "Highlight your technical projects, coding experience, and ability to solve complex problems."
+  },
+  "product-manager": {
+    name: "Product Manager",
+    tips: "Focus on: Strategic thinking, user research, cross-functional collaboration, and data-driven decisions.",
+    keySkills: ["Product Strategy", "User Research", "Data Analysis", "Cross-functional Leadership", "Roadmap Planning"],
+    coverLetterHint: "Emphasize your ability to bridge technical and business teams, and your experience with product lifecycle."
+  },
+  "data-scientist": {
+    name: "Data Scientist",
+    tips: "Focus on: Statistical analysis, machine learning, data visualization, and business impact of insights.",
+    keySkills: ["Machine Learning", "Statistical Analysis", "Python/R", "Data Visualization", "Business Intelligence"],
+    coverLetterHint: "Showcase your analytical projects, ability to derive insights from data, and business impact."
+  },
+  "designer": {
+    name: "Designer",
+    tips: "Focus on: Portfolio quality, user experience principles, design thinking, and collaboration with developers.",
+    keySkills: ["UI/UX Design", "Design Systems", "Prototyping", "User Research", "Visual Design"],
+    coverLetterHint: "Let your portfolio speak first, then emphasize your design process and user-centered approach."
+  },
+  "marketing": {
+    name: "Marketing",
+    tips: "Focus on: Campaign results, audience targeting, brand development, and ROI metrics.",
+    keySkills: ["Digital Marketing", "Content Strategy", "Analytics", "Brand Management", "Campaign Optimization"],
+    coverLetterHint: "Quantify your marketing successes, show understanding of target audiences and growth metrics."
+  },
+  "sales": {
+    name: "Sales",
+    tips: "Focus on: Sales numbers, relationship building, closing techniques, and customer retention.",
+    keySkills: ["Relationship Building", "Negotiation", "Pipeline Management", "Customer Retention", "Sales Strategy"],
+    coverLetterHint: "Lead with your sales achievements, quota performance, and relationship-building abilities."
+  },
+  "custom": {
+    name: "Custom",
+    tips: "Tailor your approach: Research the specific role requirements and company culture thoroughly.",
+    keySkills: ["Adaptability", "Research Skills", "Communication", "Problem Solving", "Industry Knowledge"],
+    coverLetterHint: "Customize everything based on the job description and company values."
+  }
+};
+
 // URL validation helper function
 const isValidUrl = (string: string): boolean => {
   try {
@@ -201,12 +263,21 @@ export default function Home() {
 
   const onDrop = async (e: React.DragEvent<HTMLDivElement>, newStatus: string) => {
     const id = e.dataTransfer.getData("jobId");
+    const job = jobs.find(j => j.id === id);
+    const oldStatus = job?.status;
+    
     setLoading(true);
     setError(null);
     try {
       const jobRef = doc(db, "jobs", id);
       await updateDoc(jobRef, { status: newStatus });
       setJobs((prev) => prev.map(job => job.id === id ? { ...job, status: newStatus } : job));
+      
+      // Show congratulations message if moved to Offer status
+      if (newStatus === "Offer" && oldStatus !== "Offer") {
+        const randomQuote = congratulationQuotes[Math.floor(Math.random() * congratulationQuotes.length)];
+        alert(randomQuote);
+      }
     } catch {
       setError("Failed to update job status. Please try again.");
     } finally {
@@ -340,20 +411,20 @@ export default function Home() {
             </button>
           </div>
           
-          <form className="grid md:grid-cols-4 gap-4 items-start" onSubmit={e => { e.preventDefault(); handleAddJob(); }}>
-            <input name="company" placeholder="Company" value={form.company} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Company" required />
-            <input name="role" placeholder="Job Title" value={form.role} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Job Title" required />
-            <input name="link" placeholder="Job Link (optional)" value={form.link} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Job Link" />
-            <button type="submit" disabled={loading} className={`w-full px-5 py-3 rounded-lg bg-gradient-to-br from-cyan-500/30 to-fuchsia-500/30 backdrop-blur-md border border-white/30 text-white font-bold shadow-[0_0_10px_rgba(255,255,255,0.3)] hover:shadow-[0_0_20px_rgba(0,255,255,0.5)] transition cursor-pointer ${loading ? 'opacity-50 cursor-not-allowed' : ''}`}
-              aria-label={editId ? "Save Changes" : "Add Job"}>
-              {editId ? "💾 Save Changes" : "➕ Add Job"}
-            </button>
+          <form className="space-y-4" onSubmit={e => { e.preventDefault(); handleAddJob(); }}>
+            {/* Main form row */}
+            <div className="grid md:grid-cols-3 gap-4 items-center">
+              <input name="company" placeholder="Company" value={form.company} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Company" required />
+              <input name="role" placeholder="Job Title" value={form.role} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Job Title" required />
+              <input name="link" placeholder="Job Link (optional)" value={form.link} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Job Link" />
+            </div>
             
+            {/* Advanced form fields */}
             {showAdvancedForm && (
-              <>
+              <div className="grid md:grid-cols-4 gap-4 items-center">
                 <input name="salary" placeholder="💰 Expected Salary" value={form.salary} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Salary" />
                 <input name="interviewDate" type="datetime-local" placeholder="📅 Interview Date" value={form.interviewDate} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Interview Date" />
-                <textarea name="companyResearch" placeholder="🏢 Company Research Notes" value={form.companyResearch} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Company Research" />
+                <textarea name="companyResearch" placeholder="🏢 Company Research Notes" value={form.companyResearch} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400 resize-none" rows={1} aria-label="Company Research" />
                 <select name="applicationTemplate" value={form.applicationTemplate} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Application Template">
                   <option value="" className="bg-gray-800">📝 Select Template</option>
                   <option value="software-engineer" className="bg-gray-800">Software Engineer</option>
@@ -364,11 +435,20 @@ export default function Home() {
                   <option value="sales" className="bg-gray-800">Sales</option>
                   <option value="custom" className="bg-gray-800">Custom</option>
                 </select>
-              </>
+              </div>
             )}
             
-            <div className="col-span-6">
-              <textarea name="notes" placeholder="Notes (e.g., interview tips, HR contact)" value={form.notes} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400" aria-label="Notes" />
+            {/* Notes field - full width */}
+            <div className="w-full">
+              <textarea name="notes" placeholder="Notes (e.g., interview tips, HR contact)" value={form.notes} onChange={handleChange} className="w-full px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400 resize-none" rows={2} aria-label="Notes" />
+            </div>
+
+            {/* Submit Button - separate row */}
+            <div className="flex justify-center">
+              <button type="submit" disabled={loading} className={`px-8 py-3 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-green-400/50 ${loading ? 'opacity-50 cursor-not-allowed transform-none' : 'cursor-pointer'}`}
+                aria-label={editId ? "Save Changes" : "Add Job"}>
+                {editId ? "💾 Save Changes" : "➕ Add Job"}
+              </button>
             </div>
           </form>
         </div>
@@ -442,6 +522,21 @@ export default function Home() {
                                   📅 Interview
                                 </button>
                               )}
+                              {job.applicationTemplate && (
+                                <button 
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    const template = applicationTemplates[job.applicationTemplate as keyof typeof applicationTemplates];
+                                    if (template) {
+                                      alert(`📝 ${template.name} Template Tips:\n\n${template.tips}\n\nKey Skills: ${template.keySkills.join(', ')}\n\nCover Letter Hint: ${template.coverLetterHint}`);
+                                    }
+                                  }} 
+                                  className="px-3 py-1 text-sm text-purple-600 text-left hover:bg-purple-50 rounded cursor-pointer" 
+                                  aria-label="View Template Tips"
+                                >
+                                  📝 Template Tips
+                                </button>
+                              )}
                             </div>
                           )}
                         </div>
@@ -460,7 +555,15 @@ export default function Home() {
                         <div className="text-xs text-purple-600 italic break-words">🏢 {job.companyResearch}</div>
                       )}
                       {job.applicationTemplate && (
-                        <div className="text-xs text-orange-600">📝 Template: {job.applicationTemplate}</div>
+                        <div className="text-xs text-orange-600 cursor-pointer hover:underline" 
+                             onClick={() => {
+                               const template = applicationTemplates[job.applicationTemplate as keyof typeof applicationTemplates];
+                               if (template) {
+                                 alert(`📝 ${template.name} Template Tips:\n\n${template.tips}\n\nKey Skills: ${template.keySkills.join(', ')}\n\nCover Letter Hint: ${template.coverLetterHint}`);
+                               }
+                             }}>
+                          📝 Template: {job.applicationTemplate} (Click for tips)
+                        </div>
                       )}
                       {job.notes && (
                         <div className="text-xs text-gray-500 italic break-words">{job.notes}</div>
