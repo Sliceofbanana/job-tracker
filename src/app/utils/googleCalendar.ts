@@ -32,8 +32,23 @@ export class GoogleCalendarIntegration {
         await this.loadGapiScript();
       }
 
-      await new Promise<void>((resolve) => {
-        window.gapi.load('client:auth2', () => resolve());
+      // Wait for gapi to be ready with timeout
+      await new Promise<void>((resolve, reject) => {
+        let attempts = 0;
+        const maxAttempts = 10;
+        
+        const checkGapi = () => {
+          attempts++;
+          if (window.gapi && window.gapi.load) {
+            window.gapi.load('client:auth2', () => resolve());
+          } else if (attempts < maxAttempts) {
+            setTimeout(checkGapi, 500);
+          } else {
+            reject(new Error('Google API not available after timeout'));
+          }
+        };
+        
+        checkGapi();
       });
 
       await window.gapi.client.init({
@@ -45,11 +60,29 @@ export class GoogleCalendarIntegration {
 
       this.gapi = window.gapi;
       this.isInitialized = true;
-      this.isSignedIn = this.gapi.auth2.getAuthInstance().isSignedIn.get();
+      
+      // Check auth status safely
+      try {
+        const authInstance = this.gapi.auth2.getAuthInstance();
+        this.isSignedIn = authInstance ? authInstance.isSignedIn.get() : false;
+      } catch (authError) {
+        console.warn('Auth instance not ready:', authError);
+        this.isSignedIn = false;
+      }
       
       console.log('Google Calendar API initialized successfully');
     } catch (error) {
       console.warn('Google Calendar API initialization failed (this is optional):', error);
+      
+      // More specific error logging for debugging
+      if (error instanceof Error) {
+        if (error.message.includes('Content Security Policy')) {
+          console.warn('CSP blocking Google APIs. Check your Content Security Policy settings.');
+        } else if (error.message.includes('origin')) {
+          console.warn('Origin not authorized. Check your Google Cloud Console authorized origins.');
+        }
+      }
+      
       // Don't throw - Google Calendar is optional functionality
     }
   }
