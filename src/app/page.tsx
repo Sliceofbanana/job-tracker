@@ -33,7 +33,7 @@ import NotificationBubbles, { useNotifications } from './components/Notification
 import ErrorBoundary from './components/ErrorBoundary';
 import GlobalErrorHandler from './components/GlobalErrorHandler';
 import { useCurrencySettings } from './components/CurrencySettings';
-import { isAdminSync } from './utils/adminAuth';
+import { useAdminStatus } from './utils/useAdminStatus';
 import { formatSalary } from './utils/currency';
 import { getGoogleCalendar, syncJobToCalendar, removeJobFromCalendar } from './utils/googleCalendar';
 
@@ -111,6 +111,7 @@ export default function Home() {
   const { user, login, logout } = useAuth();
   const { notifications, dismissNotification, showSuccess, showError, showWarning, showInfo } = useNotifications();
   const { country } = useCurrencySettings();
+  const { isAdmin: isUserAdmin, isLoading: adminLoading } = useAdminStatus(user);
 
   const [jobs, setJobs] = useState<JobEntry[]>([]);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -487,7 +488,7 @@ export default function Home() {
             { key: 'notifications', label: '🔔 Notifications', icon: '🔔' },
             { key: 'profile', label: '👤 Profile', icon: '👤' },
             { key: 'about', label: '📖 About', icon: '📖' },
-            ...(isAdminSync(user) ? [{ key: 'admin', label: '⚙️ Admin', icon: '⚙️' }] : [])
+            ...(isUserAdmin ? [{ key: 'admin', label: '⚙️ Admin', icon: '⚙️' }] : [])
           ].map(view => (
             <button
               key={view.key}
@@ -511,7 +512,7 @@ export default function Home() {
             { key: 'notifications', label: '🔔 Notifications', icon: '🔔', shortLabel: '🔔' },
             { key: 'profile', label: '👤 Profile', icon: '👤', shortLabel: '👤' },
             { key: 'about', label: '📖 About', icon: '📖', shortLabel: '📖' },
-            ...(isAdminSync(user) ? [{ key: 'admin', label: '⚙️ Admin', icon: '⚙️', shortLabel: '⚙️' }] : [])
+            ...(isUserAdmin ? [{ key: 'admin', label: '⚙️ Admin', icon: '⚙️', shortLabel: '⚙️' }] : [])
           ].map(view => (
             <button
               key={view.key}
@@ -575,7 +576,12 @@ export default function Home() {
         )}
 
         {currentView === 'admin' && (
-          isAdminSync(user) ? (
+          adminLoading ? (
+            <div className="p-8 text-center">
+              <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-white mx-auto mb-4"></div>
+              <p className="text-white/60">Verifying admin access...</p>
+            </div>
+          ) : isUserAdmin ? (
             <FeedbackAdmin />
           ) : (
             <div className="p-8 text-center">

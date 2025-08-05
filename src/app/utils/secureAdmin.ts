@@ -19,8 +19,11 @@ interface AdminAPIError {
 export async function verifyAdminStatus(email: string): Promise<boolean> {
   try {
     if (!email || typeof email !== 'string') {
+      console.log('❌ Invalid email provided to verifyAdminStatus:', email);
       return false;
     }
+
+    console.log('🔐 Sending admin verification request for:', email);
 
     const response = await fetch('/api/admin/verify', {
       method: 'POST',
@@ -33,18 +36,22 @@ export async function verifyAdminStatus(email: string): Promise<boolean> {
       }),
     });
 
+    console.log('📡 Admin verification response status:', response.status);
+
     if (!response.ok) {
-      console.error(`Admin verification failed: ${response.status} ${response.statusText}`);
+      console.error(`❌ Admin verification failed: ${response.status} ${response.statusText}`);
       return false;
     }
 
     const data: AdminVerificationResponse | AdminAPIError = await response.json();
+    console.log('📋 Admin verification response data:', data);
     
     if ('error' in data) {
-      console.error('Admin verification error:', data.error);
+      console.error('❌ Admin verification error:', data.error);
       return false;
     }
 
+    console.log('✅ Admin verification result:', data.isAdmin);
     return data.isAdmin;
   } catch (error) {
     console.error('Admin verification request failed:', error);
