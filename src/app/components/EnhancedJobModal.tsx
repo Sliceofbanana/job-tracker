@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import { JobEntry } from '../types';
 import CurrencySettings, { useCurrencySettings } from './CurrencySettings';
+import SanitizedInput from './SanitizedInput';
+import { useSecurityContext } from './SecurityProvider';
 
 interface EnhancedJobModalProps {
   isOpen: boolean;
@@ -20,6 +22,7 @@ export default function EnhancedJobModal({
   className = "" 
 }: EnhancedJobModalProps) {
   const { country, updateCountry } = useCurrencySettings();
+  const { validateInput, reportSecurityEvent, isSessionValid } = useSecurityContext();
   const [formData, setFormData] = useState<Partial<JobEntry>>({
     company: '',
     role: '',
@@ -82,19 +85,52 @@ export default function EnhancedJobModal({
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    onSubmit(formData);
+    
+    // Security validation before submission
+    if (!isSessionValid) {
+      reportSecurityEvent('INVALID_SESSION_SUBMIT', { formType: 'job_application' });
+      return;
+    }
+
+    // Sanitize all form data before submission
+    const sanitizedData: Partial<JobEntry> = {
+      ...formData,
+      company: formData.company ? validateInput(formData.company, 'text') : '',
+      role: formData.role ? validateInput(formData.role, 'text') : '',
+      link: formData.link ? validateInput(formData.link, 'url') : '',
+      notes: formData.notes ? validateInput(formData.notes, 'html') : '',
+      location: formData.location ? validateInput(formData.location, 'text') : '',
+      industry: formData.industry ? validateInput(formData.industry, 'text') : '',
+      salary: formData.salary ? validateInput(formData.salary, 'text') : '',
+      companyResearch: formData.companyResearch ? validateInput(formData.companyResearch, 'html') : '',
+      tags: formData.tags?.map(tag => validateInput(tag, 'text')) || []
+    };
+
+    onSubmit(sanitizedData);
     onClose();
   };
 
   const handleInputChange = (field: keyof JobEntry, value: string | boolean | string[] | undefined) => {
+    // Security monitoring for suspicious input patterns
+    if (typeof value === 'string' && value.length > 1000) {
+      reportSecurityEvent('SUSPICIOUS_LONG_INPUT', { field, length: value.length });
+    }
+
     setFormData(prev => ({ ...prev, [field]: value }));
   };
 
   const addTag = () => {
-    if (currentTag.trim() && !formData.tags?.includes(currentTag.trim())) {
+    const sanitizedTag = validateInput(currentTag.trim(), 'text');
+    if (sanitizedTag && !formData.tags?.includes(sanitizedTag)) {
+      // Security check for tag limits
+      if ((formData.tags?.length || 0) >= 10) {
+        reportSecurityEvent('EXCESSIVE_TAGS', { currentCount: formData.tags?.length });
+        return;
+      }
+      
       setFormData(prev => ({
         ...prev,
-        tags: [...(prev.tags || []), currentTag.trim()]
+        tags: [...(prev.tags || []), sanitizedTag]
       }));
       setCurrentTag('');
     }
@@ -136,13 +172,15 @@ export default function EnhancedJobModal({
                 <label className="block text-sm font-medium text-white/80 mb-2">
                   Company Name *
                 </label>
-                <input
-                  type="text"
-                  required
+                <SanitizedInput
                   value={formData.company || ''}
-                  onChange={(e) => handleInputChange('company', e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                  onChange={(value) => handleInputChange('company', value)}
+                  type="company"
                   placeholder="Enter company name"
+                  required={true}
+                  validate={true}
+                  maxLength={100}
+                  showCharCount={true}
                 />
               </div>
 
@@ -150,13 +188,15 @@ export default function EnhancedJobModal({
                 <label className="block text-sm font-medium text-white/80 mb-2">
                   Role/Position *
                 </label>
-                <input
-                  type="text"
-                  required
+                <SanitizedInput
                   value={formData.role || ''}
-                  onChange={(e) => handleInputChange('role', e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                  onChange={(value) => handleInputChange('role', value)}
+                  type="job-title"
                   placeholder="Enter job role"
+                  required={true}
+                  validate={true}
+                  maxLength={100}
+                  showCharCount={true}
                 />
               </div>
 
@@ -164,12 +204,13 @@ export default function EnhancedJobModal({
                 <label className="block text-sm font-medium text-white/80 mb-2">
                   Job Posting Link
                 </label>
-                <input
-                  type="url"
+                <SanitizedInput
                   value={formData.link || ''}
-                  onChange={(e) => handleInputChange('link', e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                  onChange={(value) => handleInputChange('link', value)}
+                  type="url"
+                  inputType="url"
                   placeholder="https://..."
+                  validate={true}
                 />
               </div>
 
@@ -265,12 +306,12 @@ export default function EnhancedJobModal({
                     <label className="block text-sm font-medium text-white/80 mb-2">
                       Location
                     </label>
-                    <input
-                      type="text"
+                    <SanitizedInput
                       value={formData.location || ''}
-                      onChange={(e) => handleInputChange('location', e.target.value)}
-                      className="w-full px-4 py-3 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                      onChange={(value) => handleInputChange('location', value)}
+                      type="text"
                       placeholder="City, State/Country"
+                      maxLength={100}
                     />
                   </div>
 
@@ -294,12 +335,12 @@ export default function EnhancedJobModal({
                     <label className="block text-sm font-medium text-white/80 mb-2">
                       Salary/Compensation
                     </label>
-                    <input
-                      type="text"
+                    <SanitizedInput
                       value={formData.salary || ''}
-                      onChange={(e) => handleInputChange('salary', e.target.value)}
-                      className="w-full px-4 py-3 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                      onChange={(value) => handleInputChange('salary', value)}
+                      type="text"
                       placeholder="e.g., $80,000 - $100,000"
+                      maxLength={50}
                     />
                   </div>
                 </div>
@@ -310,12 +351,12 @@ export default function EnhancedJobModal({
                     <label className="block text-sm font-medium text-white/80 mb-2">
                       Industry
                     </label>
-                    <input
-                      type="text"
+                    <SanitizedInput
                       value={formData.industry || ''}
-                      onChange={(e) => handleInputChange('industry', e.target.value)}
-                      className="w-full px-4 py-3 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                      onChange={(value) => handleInputChange('industry', value)}
+                      type="text"
                       placeholder="e.g., Technology, Healthcare"
+                      maxLength={50}
                     />
                   </div>
 
@@ -379,21 +420,26 @@ export default function EnhancedJobModal({
                 {/* Tags */}
                 <div>
                   <label className="block text-sm font-medium text-white/80 mb-2">
-                    Tags
+                    Tags (Max 10)
                   </label>
                   <div className="flex gap-2 mb-3">
-                    <input
-                      type="text"
+                    <SanitizedInput
                       value={currentTag}
-                      onChange={(e) => setCurrentTag(e.target.value)}
-                      onKeyPress={(e) => e.key === 'Enter' && (e.preventDefault(), addTag())}
-                      className="flex-1 px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                      onChange={setCurrentTag}
+                      type="text"
                       placeholder="Add a tag (e.g., javascript, frontend, startup)"
+                      maxLength={30}
+                      className="flex-1"
                     />
                     <button
                       type="button"
                       onClick={addTag}
-                      className="px-4 py-2 rounded-lg bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30 transition-all duration-200"
+                      disabled={(formData.tags?.length || 0) >= 10}
+                      className={`px-4 py-2 rounded-lg transition-all duration-200 ${
+                        (formData.tags?.length || 0) >= 10
+                          ? 'bg-gray-600/20 text-gray-400 cursor-not-allowed'
+                          : 'bg-cyan-500/20 text-cyan-400 hover:bg-cyan-500/30'
+                      }`}
                     >
                       Add
                     </button>
@@ -427,12 +473,15 @@ export default function EnhancedJobModal({
               <label className="block text-sm font-medium text-white/80 mb-2">
                 Notes
               </label>
-              <textarea
+              <SanitizedInput
                 value={formData.notes || ''}
-                onChange={(e) => handleInputChange('notes', e.target.value)}
-                className="w-full px-4 py-3 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400 resize-none"
-                rows={4}
+                onChange={(value) => handleInputChange('notes', value)}
+                type="feedback"
+                inputType="textarea"
                 placeholder="Add any notes about this application..."
+                maxLength={2000}
+                showCharCount={true}
+                rows={4}
               />
             </div>
 
@@ -442,12 +491,15 @@ export default function EnhancedJobModal({
                 <label className="block text-sm font-medium text-white/80 mb-2">
                   Company Research & Prep Notes
                 </label>
-                <textarea
+                <SanitizedInput
                   value={formData.companyResearch || ''}
-                  onChange={(e) => handleInputChange('companyResearch', e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400 resize-none"
-                  rows={4}
+                  onChange={(value) => handleInputChange('companyResearch', value)}
+                  type="feedback"
+                  inputType="textarea"
                   placeholder="Company culture, recent news, interview prep notes..."
+                  maxLength={3000}
+                  showCharCount={true}
+                  rows={4}
                 />
               </div>
             )}

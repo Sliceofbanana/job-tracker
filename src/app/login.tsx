@@ -6,6 +6,11 @@ import {
   signInWithEmailAndPassword
 } from "firebase/auth";
 import { auth } from "./firebase";
+import SecurePasswordInput from "./components/SecurePasswordInput";
+import SanitizedInput from "./components/SanitizedInput";
+import { usePasswordAttemptLimit } from "./utils/usePasswordHooks";
+import { validatePassword, DEFAULT_PASSWORD_POLICY } from "./utils/passwordPolicy";
+import { sanitizeEmail } from "./utils/inputSanitization";
 
 interface LoginProps {
   onLogin: () => void;
@@ -58,51 +63,117 @@ export default function Login({ onLogin }: LoginProps) {
     password: "",
     confirmPassword: ""
   });
+  const [isPasswordValid, setIsPasswordValid] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
+  const [errors, setErrors] = useState<string[]>([]);
+  
+  // Rate limiting for login attempts
+  const loginAttempts = usePasswordAttemptLimit(formData.email || 'anonymous');
 
   useEffect(() => {
     setCurrentQuoteIndex(Math.floor(Math.random() * quotes.length));
   }, []);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setFormData((prev) => ({
-      ...prev,
-      [e.target.name]: e.target.value
-    }));
+  const handleEmailChange = (sanitizedEmail: string) => {
+    setFormData(prev => ({ ...prev, email: sanitizedEmail }));
+    setErrors([]);
+  };
+
+  const handlePasswordChange = (password: string) => {
+    setFormData(prev => ({ ...prev, password }));
+    setErrors([]);
+  };
+
+  const handleConfirmPasswordChange = (confirmPassword: string) => {
+    setFormData(prev => ({ ...prev, confirmPassword }));
+    setErrors([]);
+  };
+
+  const validateForm = (): boolean => {
+    const newErrors: string[] = [];
+    
+    if (!formData.email.trim()) {
+      newErrors.push("Email is required");
+    }
+    
+    if (!formData.password) {
+      newErrors.push("Password is required");
+    }
+    
+    if (isSignUp) {
+      // Validate password strength for sign up
+      const passwordValidation = validatePassword(formData.password, DEFAULT_PASSWORD_POLICY, {
+        email: formData.email
+      });
+      
+      if (!passwordValidation.isValid) {
+        newErrors.push(...passwordValidation.errors);
+      }
+      
+      if (formData.password !== formData.confirmPassword) {
+        newErrors.push("Passwords don't match");
+      }
+    }
+    
+    setErrors(newErrors);
+    return newErrors.length === 0;
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    
+    if (!validateForm()) return;
+    if (!loginAttempts.allowed) return;
+    
+    setIsLoading(true);
+    setErrors([]);
 
     try {
+      const sanitizedEmail = sanitizeEmail(formData.email);
+      
       if (isSignUp) {
-        if (formData.password !== formData.confirmPassword) {
-          alert("Passwords don't match!");
-          return;
-        }
-
         const userCredential = await createUserWithEmailAndPassword(
           auth,
-          formData.email,
+          sanitizedEmail,
           formData.password
         );
         console.log("User created:", userCredential.user);
-        alert("Account created successfully!");
+        loginAttempts.recordAttempt(true);
         onLogin();
       } else {
         const userCredential = await signInWithEmailAndPassword(
           auth,
-          formData.email,
+          sanitizedEmail,
           formData.password
         );
         console.log("User signed in:", userCredential.user);
-        alert("Signed in successfully!");
+        loginAttempts.recordAttempt(true);
         onLogin();
       }
     } catch (error: unknown) {
-      const errorMessage =
-        error instanceof Error ? error.message : "Authentication failed";
       console.error("Authentication error:", error);
-      alert(errorMessage);
+      loginAttempts.recordAttempt(false);
+      
+      let errorMessage = "An error occurred. Please try again.";
+      
+      const authError = error as { code?: string };
+      if (authError.code === 'auth/user-not-found') {
+        errorMessage = "No account found with this email address";
+      } else if (authError.code === 'auth/wrong-password') {
+        errorMessage = "Incorrect password";
+      } else if (authError.code === 'auth/email-already-in-use') {
+        errorMessage = "An account with this email already exists";
+      } else if (authError.code === 'auth/weak-password') {
+        errorMessage = "Password is too weak";
+      } else if (authError.code === 'auth/invalid-email') {
+        errorMessage = "Invalid email address";
+      } else if (authError.code === 'auth/too-many-requests') {
+        errorMessage = "Too many failed attempts. Please try again later.";
+      }
+      
+      setErrors([errorMessage]);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -146,49 +217,68 @@ export default function Login({ onLogin }: LoginProps) {
                 </div>
 
                 <form onSubmit={handleSubmit} className="space-y-3 sm:space-y-4">
+                  {/* Error Messages */}
+                  {errors.length > 0 && (
+                    <div className="p-3 rounded-lg bg-red-500/20 border border-red-400/30">
+                      <div className="text-red-300 text-sm font-medium mb-1">Please fix these issues:</div>
+                      <ul className="text-red-200 text-xs space-y-1">
+                        {errors.map((error, index) => (
+                          <li key={index} className="flex items-start space-x-2">
+                            <span className="text-red-400 mt-0.5">•</span>
+                            <span>{error}</span>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-1 sm:mb-2">
+                    <label className="block text-white text-xs sm:text-sm font-medium mb-1 sm:mb-2">
                       Email
                     </label>
-                    <input
-                      type="email"
-                      name="email"
-                      placeholder="Enter your email"
+                    <SanitizedInput
                       value={formData.email}
-                      onChange={handleInputChange}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-lg bg-gray-50 border-2 border-gray-200 text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition-all text-sm sm:text-base"
-                      required
+                      onChange={handleEmailChange}
+                      type="email"
+                      inputType="email"
+                      placeholder="Enter your email"
+                      validate={true}
+                      disabled={isLoading || !loginAttempts.allowed}
+                      className="text-sm sm:text-base"
                     />
                   </div>
 
                   <div>
-                    <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-1 sm:mb-2">
+                    <label className="block text-white text-xs sm:text-sm font-medium mb-1 sm:mb-2">
                       Password
                     </label>
-                    <input
-                      type="password"
-                      name="password"
-                      placeholder="Enter your password"
+                    <SecurePasswordInput
                       value={formData.password}
-                      onChange={handleInputChange}
-                      className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-lg bg-gray-50 border-2 border-gray-200 text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition-all text-sm sm:text-base"
-                      required
+                      onChange={handlePasswordChange}
+                      onValidationChange={setIsPasswordValid}
+                      placeholder="Enter your password"
+                      personalInfo={{ email: formData.email }}
+                      showStrengthMeter={isSignUp}
+                      showRequirements={isSignUp}
+                      identifier={formData.email || 'anonymous'}
+                      disabled={isLoading}
+                      className="text-sm sm:text-base"
                     />
                   </div>
 
                   {isSignUp && (
                     <div>
-                      <label className="block text-gray-700 text-xs sm:text-sm font-medium mb-1 sm:mb-2">
+                      <label className="block text-white text-xs sm:text-sm font-medium mb-1 sm:mb-2">
                         Confirm Password
                       </label>
-                      <input
-                        type="password"
-                        name="confirmPassword"
-                        placeholder="Confirm your password"
+                      <SecurePasswordInput
                         value={formData.confirmPassword}
-                        onChange={handleInputChange}
-                        className="w-full px-3 sm:px-4 py-2 sm:py-3 rounded-lg bg-gray-50 border-2 border-gray-200 text-gray-800 placeholder:text-gray-400 focus:outline-none focus:ring-2 focus:ring-cyan-400 focus:border-cyan-400 transition-all text-sm sm:text-base"
-                        required
+                        onChange={handleConfirmPasswordChange}
+                        placeholder="Confirm your password"
+                        showStrengthMeter={false}
+                        showRequirements={false}
+                        disabled={isLoading}
+                        className="text-sm sm:text-base"
                       />
                     </div>
                   )}
@@ -213,9 +303,24 @@ export default function Login({ onLogin }: LoginProps) {
 
                   <button
                     type="submit"
-                    className="w-full px-4 sm:px-6 py-2 sm:py-3 rounded-lg bg-gradient-to-br from-cyan-500 to-fuchsia-500 border-2 border-transparent text-white font-bold shadow-lg hover:shadow-xl transition-all duration-200 transform hover:scale-105 cursor-pointer text-sm sm:text-base"
+                    disabled={isLoading || !loginAttempts.allowed || (isSignUp && !isPasswordValid)}
+                    className={`w-full px-4 sm:px-6 py-2 sm:py-3 rounded-lg font-bold shadow-lg transition-all duration-200 text-sm sm:text-base ${
+                      isLoading || !loginAttempts.allowed || (isSignUp && !isPasswordValid)
+                        ? 'bg-gray-600 text-gray-300 cursor-not-allowed'
+                        : 'bg-gradient-to-br from-cyan-500 to-fuchsia-500 border-2 border-transparent text-white hover:shadow-xl transform hover:scale-105 cursor-pointer'
+                    }`}
                   >
-                    {isSignUp ? "Create Account" : "Sign In"}
+                    {isLoading ? (
+                      <span className="flex items-center justify-center space-x-2">
+                        <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin"></div>
+                        <span>{isSignUp ? "Creating Account..." : "Signing In..."}</span>
+                      </span>
+                    ) : (
+                      <>
+                        {isSignUp ? "Create Account" : "Sign In"}
+                        {!loginAttempts.allowed && " (Locked)"}
+                      </>
+                    )}
                   </button>
                 </form>
 

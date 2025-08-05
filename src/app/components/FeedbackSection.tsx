@@ -66,7 +66,7 @@ export default function FeedbackSection({ className = "" }: FeedbackSectionProps
   return (
     <div className={`${className}`}>
       {/* Feedback Button */}
-      <div className="flex justify-center">
+      <div className="flex justify-start">
         <button
           onClick={() => setIsModalOpen(true)}
           className="px-4 py-2 sm:px-6 sm:py-3 rounded-lg bg-gradient-to-r from-orange-500 to-yellow-600 hover:from-orange-600 hover:to-yellow-700 text-white font-bold text-sm sm:text-base shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border border-orange-400/50 flex items-center gap-2"

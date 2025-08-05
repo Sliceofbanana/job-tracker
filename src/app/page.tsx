@@ -30,8 +30,10 @@ import AboutPage from './components/AboutPage';
 import FeedbackAdmin from './components/FeedbackAdmin';
 import ProfileSettings from './components/ProfileSettings';
 import NotificationBubbles, { useNotifications } from './components/NotificationBubbles';
+import ErrorBoundary from './components/ErrorBoundary';
+import GlobalErrorHandler from './components/GlobalErrorHandler';
 import { useCurrencySettings } from './components/CurrencySettings';
-import { isAdmin } from './utils/adminAuth';
+import { isAdminSync } from './utils/adminAuth';
 import { formatSalary } from './utils/currency';
 import { getGoogleCalendar, syncJobToCalendar, removeJobFromCalendar } from './utils/googleCalendar';
 
@@ -461,8 +463,10 @@ export default function Home() {
   );
 
   return (
-    <div className="min-h-screen overflow-x-hidden p-1 sm:p-2 md:p-4 lg:p-6" style={{ backgroundColor: '#333333' }}>
-      <Analytics />
+    <ErrorBoundary>
+      <GlobalErrorHandler />
+      <div className="min-h-screen overflow-x-hidden p-1 sm:p-2 md:p-4 lg:p-6" style={{ backgroundColor: '#333333' }}>
+        <Analytics />
       
       {/* Notification Bubbles */}
       <NotificationBubbles 
@@ -483,7 +487,7 @@ export default function Home() {
             { key: 'notifications', label: '🔔 Notifications', icon: '🔔' },
             { key: 'profile', label: '👤 Profile', icon: '👤' },
             { key: 'about', label: '📖 About', icon: '📖' },
-            ...(isAdmin(user) ? [{ key: 'admin', label: '⚙️ Admin', icon: '⚙️' }] : [])
+            ...(isAdminSync(user) ? [{ key: 'admin', label: '⚙️ Admin', icon: '⚙️' }] : [])
           ].map(view => (
             <button
               key={view.key}
@@ -507,7 +511,7 @@ export default function Home() {
             { key: 'notifications', label: '🔔 Notifications', icon: '🔔', shortLabel: '🔔' },
             { key: 'profile', label: '👤 Profile', icon: '👤', shortLabel: '👤' },
             { key: 'about', label: '📖 About', icon: '📖', shortLabel: '📖' },
-            ...(isAdmin(user) ? [{ key: 'admin', label: '⚙️ Admin', icon: '⚙️', shortLabel: '⚙️' }] : [])
+            ...(isAdminSync(user) ? [{ key: 'admin', label: '⚙️ Admin', icon: '⚙️', shortLabel: '⚙️' }] : [])
           ].map(view => (
             <button
               key={view.key}
@@ -571,7 +575,7 @@ export default function Home() {
         )}
 
         {currentView === 'admin' && (
-          isAdmin(user) ? (
+          isAdminSync(user) ? (
             <FeedbackAdmin />
           ) : (
             <div className="p-8 text-center">
@@ -837,5 +841,6 @@ export default function Home() {
         </div>
       )}
     </div>
+    </ErrorBoundary>
   );
 }

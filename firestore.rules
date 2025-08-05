@@ -1,6 +1,28 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Helper function to check if user is admin
+    // NOTE: Replace these email addresses with your actual admin emails
+    // These are server-side rules and are not exposed to clients
+    function isAdmin() {
+      return request.auth != null && 
+             request.auth.token.email in ['sliceofbanana02@gmail.com', 'genesisjr.esdrilon@gmail.com'];
+    }
+    
+    // Helper function to check if user is super admin
+    // NOTE: Replace with your actual super admin emails
+    function isSuperAdmin() {
+      return request.auth != null && 
+             request.auth.token.email in ['sliceofbanana02@gmail.com', 'genesisjr.esdrilon@gmail.com'];
+    }
+    
+    // Helper function to validate feedback update fields
+    function isValidFeedbackUpdate() {
+      let allowedFields = ['status', 'assignedTo', 'assignedBy', 'lastUpdated', 'priority', 'lastUpdatedBy', 'prioritySetBy', 'bulkUpdatedBy'];
+      return request.resource.data.keys().hasAll(['status']) &&
+             request.resource.data.keys().toSet().difference(resource.data.keys().toSet().union(allowedFields.toSet())).size() == 0;
+    }
+    
     match /jobs/{jobId} {
       // Allow read and delete if user owns the document
       allow read, delete: if request.auth != null && request.auth.uid == resource.data.uid;
@@ -14,15 +36,61 @@ service cloud.firestore {
     
     match /feedback/{feedbackId} {
       // Allow anyone to create feedback (for bug reports and suggestions)
-      allow create: if request.auth != null;
+      allow create: if request.auth != null &&
+                    // Ensure required fields are present
+                    request.resource.data.keys().hasAll(['type', 'title', 'description']) &&
+                    // Prevent users from setting admin-only fields
+                    !request.resource.data.keys().hasAny(['assignedTo', 'assignedBy', 'priority', 'lastUpdatedBy']);
+      
       // Allow only admin users to read feedback
-      allow read: if request.auth != null && 
-                  request.auth.token.email in ['sliceofbanana02@gmail.com', 'genesisjr.esdrilon@gmail.com'];
-      // Allow admin users to update feedback status
-      allow update: if request.auth != null && 
-                    request.auth.token.email in ['sliceofbanana02@gmail.com', 'genesisjr.esdrilon@gmail.com'] &&
-                    request.resource.data.keys().hasAll(['status']) &&
-                    request.resource.data.keys().hasOnly(['status', 'type', 'title', 'description', 'email', 'timestamp', 'userAgent', 'url']);
+      allow read: if isAdmin();
+      
+      // Allow admin users to update feedback with proper field validation
+      allow update: if isAdmin() && isValidFeedbackUpdate() &&
+                    // Ensure timestamp updates include lastUpdated
+                    (request.resource.data.keys().hasAny(['lastUpdated']) ? 
+                     request.resource.data.lastUpdated is timestamp : true) &&
+                    // Validate assignedBy field matches current user when present
+                    (request.resource.data.keys().hasAny(['assignedBy']) ? 
+                     request.resource.data.assignedBy == request.auth.token.email : true);
+      
+      // Only super admin can delete feedback
+      allow delete: if isSuperAdmin();
+    }
+    
+    // Admin users collection for enhanced security
+    match /admin_users/{adminEmail} {
+      // Only super admin can read/write admin user data
+      allow read, write: if isSuperAdmin();
+      
+      // Admins can read their own data
+      allow read: if isAdmin() && adminEmail == request.auth.token.email;
+    }
+    
+    // Admin audit log collection
+    match /admin_audit_log/{logId} {
+      // Only allow creating audit logs (no reading/updating/deleting)
+      allow create: if isAdmin() &&
+                    request.resource.data.keys().hasAll(['adminEmail', 'action', 'timestamp']) &&
+                    request.resource.data.adminEmail == request.auth.token.email;
+      
+      // Only super admin can read audit logs
+      allow read: if isSuperAdmin();
+    }
+    
+    // Security events collection
+    match /security_events/{eventId} {
+      // System can create security events
+      allow create: if request.auth != null;
+      
+      // Only super admin can read security events
+      allow read: if isSuperAdmin();
+    }
+    
+    // Admin configuration (for managing admin emails dynamically)
+    match /admin_config/settings {
+      // Only super admin can read/write admin configuration
+      allow read, write: if isSuperAdmin();
     }
   }
 }

@@ -7,7 +7,6 @@ import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/fire
 import { deleteUser } from 'firebase/auth';
 import AnalyticsDashboard from './AnalyticsDashboard';
 import FeedbackSection from './FeedbackSection';
-import CurrencySettings, { useCurrencySettings } from './CurrencySettings';
 import { JobEntry } from '../types';
 import { calculateStats } from '../utils';
 
@@ -19,7 +18,8 @@ interface ProfileSettingsProps {
 
 export default function ProfileSettings({ className = "", onClose, jobs = [] }: ProfileSettingsProps) {
   const { user } = useAuth();
-  const { country, updateCountry } = useCurrencySettings();
+  // Currency settings available but not currently used in this component
+  // const _currencySettings = useCurrencySettings();
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
