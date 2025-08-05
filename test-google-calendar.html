@@ -1,0 +1,234 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Google Calendar API Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .test-section {
+            border: 1px solid #ddd;
+            margin: 10px 0;
+            padding: 15px;
+            border-radius: 5px;
+        }
+        .success { background-color: #d4edda; border-color: #c3e6cb; }
+        .error { background-color: #f8d7da; border-color: #f5c6cb; }
+        .warning { background-color: #fff3cd; border-color: #ffeaa7; }
+        button {
+            background-color: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+        button:hover {
+            background-color: #0056b3;
+        }
+        #results {
+            background-color: #f8f9fa;
+            border: 1px solid #dee2e6;
+            padding: 15px;
+            border-radius: 5px;
+            margin-top: 20px;
+            white-space: pre-wrap;
+            font-family: monospace;
+        }
+    </style>
+</head>
+<body>
+    <h1>🔍 Google Calendar API Connection Test</h1>
+    
+    <div class="test-section">
+        <h3>Configuration Check</h3>
+        <p><strong>API Key:</strong> <span id="apiKey">Checking...</span></p>
+        <p><strong>Client ID:</strong> <span id="clientId">Checking...</span></p>
+        <p><strong>Current Origin:</strong> <span id="origin">Checking...</span></p>
+    </div>
+
+    <div class="test-section">
+        <h3>API Loading Test</h3>
+        <button onclick="testApiLoading()">🔄 Test Google API Loading</button>
+        <p id="apiLoadingStatus">Not tested yet</p>
+    </div>
+
+    <div class="test-section">
+        <h3>API Initialization Test</h3>
+        <button onclick="testApiInit()">🚀 Test API Initialization</button>
+        <p id="apiInitStatus">Not tested yet</p>
+    </div>
+
+    <div class="test-section">
+        <h3>Sign-in Test</h3>
+        <button onclick="testSignIn()">🔐 Test Google Sign-in</button>
+        <p id="signInStatus">Not tested yet</p>
+    </div>
+
+    <div id="results"></div>
+
+    <script>
+        // Configuration
+        const API_KEY = 'AIzaSyDXxq64viBhUhol7rVtgG0ywlSqp83dUUQ';
+        const CLIENT_ID = '371415396058-m01mutscge7tgu9jot50cidm4qij40oe.apps.googleusercontent.com';
+        const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"];
+        const SCOPES = 'https://www.googleapis.com/auth/calendar';
+
+        let resultsDiv = document.getElementById('results');
+        
+        function log(message) {
+            console.log(message);
+            resultsDiv.textContent += new Date().toLocaleTimeString() + ': ' + message + '\n';
+        }
+
+        function updateStatus(elementId, message, type = 'info') {
+            const element = document.getElementById(elementId);
+            element.textContent = message;
+            element.className = type;
+        }
+
+        // Initialize display
+        document.getElementById('apiKey').textContent = API_KEY ? '✅ Present' : '❌ Missing';
+        document.getElementById('clientId').textContent = CLIENT_ID ? '✅ Present' : '❌ Missing';
+        document.getElementById('origin').textContent = window.location.origin;
+
+        async function testApiLoading() {
+            log('🔄 Testing Google API loading...');
+            updateStatus('apiLoadingStatus', 'Loading...', 'warning');
+
+            try {
+                if (!window.gapi) {
+                    log('📜 Loading Google API script...');
+                    await new Promise((resolve, reject) => {
+                        const script = document.createElement('script');
+                        script.src = 'https://apis.google.com/js/api.js';
+                        script.onload = resolve;
+                        script.onerror = reject;
+                        document.head.appendChild(script);
+                    });
+                }
+
+                log('✅ Google API script loaded');
+                
+                await new Promise((resolve, reject) => {
+                    window.gapi.load('client:auth2', resolve, reject);
+                });
+
+                log('✅ Google API client modules loaded');
+                updateStatus('apiLoadingStatus', '✅ Success', 'success');
+                
+            } catch (error) {
+                log('❌ Failed to load Google API: ' + error.message);
+                updateStatus('apiLoadingStatus', '❌ Failed: ' + error.message, 'error');
+            }
+        }
+
+        async function testApiInit() {
+            log('🚀 Testing API initialization...');
+            updateStatus('apiInitStatus', 'Initializing...', 'warning');
+
+            try {
+                if (!window.gapi) {
+                    throw new Error('Google API not loaded. Run API loading test first.');
+                }
+
+                await window.gapi.client.init({
+                    apiKey: API_KEY,
+                    clientId: CLIENT_ID,
+                    discoveryDocs: DISCOVERY_DOCS,
+                    scope: SCOPES
+                });
+
+                log('✅ Google API client initialized');
+
+                const authInstance = window.gapi.auth2.getAuthInstance();
+                if (authInstance) {
+                    log('✅ Auth instance created');
+                    log('🔐 Current sign-in status: ' + (authInstance.isSignedIn.get() ? 'Signed in' : 'Not signed in'));
+                    updateStatus('apiInitStatus', '✅ Success', 'success');
+                } else {
+                    throw new Error('Failed to get auth instance');
+                }
+
+            } catch (error) {
+                log('❌ API initialization failed: ' + error.message);
+                
+                // Analyze specific errors
+                if (error.error) {
+                    log('🔬 Error type: ' + error.error);
+                    switch (error.error) {
+                        case 'idpiframe_initialization_failed':
+                            log('💡 Solution: Check OAuth consent screen configuration');
+                            log('   - Verify app is published or you are a test user');
+                            log('   - Check authorized domains in OAuth consent screen');
+                            break;
+                        case 'invalid_client':
+                            log('💡 Solution: Check client ID configuration');
+                            log('   - Verify client ID is correct');
+                            log('   - Check if client is enabled for web applications');
+                            break;
+                    }
+                }
+                
+                updateStatus('apiInitStatus', '❌ Failed: ' + error.message, 'error');
+            }
+        }
+
+        async function testSignIn() {
+            log('🔐 Testing Google sign-in...');
+            updateStatus('signInStatus', 'Signing in...', 'warning');
+
+            try {
+                if (!window.gapi || !window.gapi.auth2) {
+                    throw new Error('Google API not initialized. Run initialization test first.');
+                }
+
+                const authInstance = window.gapi.auth2.getAuthInstance();
+                if (!authInstance) {
+                    throw new Error('Auth instance not available');
+                }
+
+                await authInstance.signIn();
+                
+                log('✅ Sign-in successful!');
+                log('👤 User: ' + authInstance.currentUser.get().getBasicProfile().getEmail());
+                updateStatus('signInStatus', '✅ Success', 'success');
+
+            } catch (error) {
+                log('❌ Sign-in failed: ' + error.message);
+                
+                if (error.error) {
+                    log('🔬 Error type: ' + error.error);
+                    switch (error.error) {
+                        case 'access_denied':
+                            log('💡 User denied access or permissions not granted');
+                            break;
+                        case 'popup_blocked_by_browser':
+                            log('💡 Browser blocked the popup. Allow popups for this site.');
+                            break;
+                        case 'origin_mismatch':
+                            log('💡 Origin not authorized: ' + window.location.origin);
+                            log('   Add this origin to Google Cloud Console > Credentials > Authorized JavaScript origins');
+                            break;
+                    }
+                }
+                
+                updateStatus('signInStatus', '❌ Failed: ' + error.message, 'error');
+            }
+        }
+
+        // Auto-run configuration check
+        log('🔍 Starting Google Calendar API diagnostics...');
+        log('Current URL: ' + window.location.href);
+        log('Current origin: ' + window.location.origin);
+        log('API Key configured: ' + (API_KEY ? 'Yes' : 'No'));
+        log('Client ID configured: ' + (CLIENT_ID ? 'Yes' : 'No'));
+    </script>
+</body>
+</html>

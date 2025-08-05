@@ -303,7 +303,6 @@ export class GoogleCalendarIntegration {
     let startDateTime: string;
     let colorId: string;
     let location: string | undefined;
-    let eventTypeSpecific: { [key: string]: any } = {};
 
     switch (eventType) {
       case 'application':
@@ -342,7 +341,25 @@ export class GoogleCalendarIntegration {
     // Build event object according to API specification
     const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
     
-    const calendarEvent: any = {
+    const calendarEvent: {
+      summary: string;
+      description: string;
+      start: { dateTime: string; timeZone: string };
+      end: { dateTime: string; timeZone: string };
+      colorId: string;
+      reminders: {
+        useDefault: boolean;
+        overrides: Array<{ method: string; minutes: number }>;
+      };
+      extendedProperties: {
+        private: Record<string, string>;
+      };
+      transparency: string;
+      visibility: string;
+      eventType: string;
+      location?: string;
+      source?: { title: string; url: string };
+    } = {
       summary: title,
       description: description,
       start: {
@@ -629,7 +646,6 @@ export const syncMultipleJobsToCalendar = async (jobs: JobEntry[]): Promise<{
   failed: number;
   errors: string[];
 }> => {
-  const calendar = getGoogleCalendar();
   let success = 0;
   let failed = 0;
   const errors: string[] = [];
