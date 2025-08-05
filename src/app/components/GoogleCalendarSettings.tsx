@@ -63,29 +63,51 @@ export default function GoogleCalendarSettings({ className = "", onConnectionCha
     } catch (err: unknown) {
       console.error('Calendar connection error:', err);
       
-      // More specific error handling
+      // Enhanced error handling with specific diagnostics
       let errorMessage = 'Error connecting to Google Calendar.';
       
       const error = err as { error?: string; details?: string; message?: string };
       
-      if (error.error === 'popup_blocked_by_browser') {
+      if (error.message) {
+        // Use the detailed error message from the improved calendar integration
+        errorMessage = error.message;
+      } else if (error.error === 'popup_blocked_by_browser') {
         errorMessage = 'Pop-up blocked. Please allow pop-ups for this site and try again.';
       } else if (error.error === 'access_denied') {
         errorMessage = 'Access denied. Please grant calendar permissions and try again.';
       } else if (error.error === 'invalid_client') {
         errorMessage = 'Invalid client configuration. Please check your Google Cloud Console settings.';
       } else if (error.error === 'origin_mismatch') {
-        errorMessage = 'Origin not authorized. Please add your domain to authorized JavaScript origins in Google Cloud Console.';
+        errorMessage = `Origin not authorized. Please add ${window.location.origin} to authorized JavaScript origins in Google Cloud Console.`;
       } else if (error.error === 'idpiframe_initialization_failed') {
-        errorMessage = 'Google API initialization failed. Please check your client ID and try again.';
+        errorMessage = 'Google API initialization failed. Check OAuth consent screen configuration in Google Cloud Console.';
       } else if (error.details) {
         errorMessage = `Google Calendar error: ${error.details}`;
-      } else if (error.message) {
-        errorMessage = `Connection error: ${error.message}`;
       }
       
-      // Log the full error for debugging
-      console.error('Full error object:', JSON.stringify(err, null, 2));
+      // Log detailed debugging information
+      console.group('🔍 Google Calendar Debug Information');
+      console.log('Current URL:', window.location.href);
+      console.log('Current origin:', window.location.origin);
+      console.log('Environment variables check:');
+      console.log('- API Key present:', !!process.env.NEXT_PUBLIC_GOOGLE_API_KEY);
+      console.log('- Client ID present:', !!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
+      console.log('- Client ID value:', process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
+      console.log('Full error object:', JSON.stringify(err, null, 2));
+      console.log('Google API available:', !!window.gapi);
+      console.groupEnd();
+      
+      // Additional context for common errors
+      if (error.error === 'origin_mismatch') {
+        console.warn('🚨 SOLUTION: In Google Cloud Console > APIs & Services > Credentials');
+        console.warn('Add this origin to "Authorized JavaScript origins":', window.location.origin);
+      }
+      
+      if (error.error === 'idpiframe_initialization_failed') {
+        console.warn('🚨 SOLUTION: Check OAuth consent screen configuration');
+        console.warn('1. Make sure app is published or you are a test user');
+        console.warn('2. Verify authorized domains include your domain');
+      }
       
       setError(errorMessage);
     } finally {
