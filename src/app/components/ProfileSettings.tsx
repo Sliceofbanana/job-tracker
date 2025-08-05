@@ -158,7 +158,7 @@ export default function ProfileSettings({ className = "", onClose, jobs = [] }: 
           {/* Feedback Section */}
           <div className="mb-4 sm:mb-6 p-4 sm:p-6 rounded-xl bg-gradient-to-br from-blue-800/30 to-purple-800/30 backdrop-blur-md border border-blue-400/30">
             <div className="mb-4">
-              <h3 className="text-lg sm:text-xl font-bold text-blue-300 mb-2 flex items-center justify-start gap-2">
+              <h3 className="text-lg sm:text-xl font-bold text-blue-300 mb-2 text-left">
                 💬 Help Us Improve
               </h3>
               <p className="text-sm text-white/70">
