@@ -7,6 +7,7 @@ import {
   logAdminAction,
   clearAdminCache
 } from '../utils/adminAuth';
+import TeamManagementPanel from './TeamManagementPanel';
 
 interface SecurityEvent {
   id: string;
@@ -33,6 +34,7 @@ export default function AdminSecurityPanel({ onSecurityAlert }: AdminSecurityPan
   const [adminUser, setAdminUser] = useState<AdminUser | null>(null);
   const [securityEvents, setSecurityEvents] = useState<SecurityEvent[]>([]);
   const [showSecurityPanel, setShowSecurityPanel] = useState(false);
+  const [showTeamManagement, setShowTeamManagement] = useState(false);
   const [sessionInfo] = useState({
     loginTime: new Date(),
     actionsPerformed: 0,
@@ -147,6 +149,7 @@ export default function AdminSecurityPanel({ onSecurityAlert }: AdminSecurityPan
   }
 
   return (
+    <>
     <div className="bg-white/5 backdrop-blur-md border border-white/10 rounded-xl p-4">
       <div className="flex items-center justify-between mb-4">
         <h3 className="text-lg font-semibold text-white flex items-center gap-2">
@@ -201,6 +204,16 @@ export default function AdminSecurityPanel({ onSecurityAlert }: AdminSecurityPan
         >
           🔄 Refresh Status
         </button>
+        
+        {/* Team Management - Only for Super Admins */}
+        {adminUser.role === 'super-admin' && (
+          <button
+            onClick={() => setShowTeamManagement(true)}
+            className="px-3 py-1 rounded-lg bg-green-600/80 text-white hover:bg-green-700/80 transition-colors text-sm"
+          >
+            👥 Manage Team
+          </button>
+        )}
         
         <button
           onClick={handleForceLogout}
@@ -262,5 +275,11 @@ export default function AdminSecurityPanel({ onSecurityAlert }: AdminSecurityPan
         </div>
       )}
     </div>
+
+    {/* Team Management Modal */}
+    {showTeamManagement && (
+      <TeamManagementPanel onClose={() => setShowTeamManagement(false)} />
+    )}
+    </>
   );
 }
