@@ -11,5 +11,18 @@ service cloud.firestore {
                     request.auth.uid == resource.data.uid && 
                     request.auth.uid == request.resource.data.uid;
     }
+    
+    match /feedback/{feedbackId} {
+      // Allow anyone to create feedback (for bug reports and suggestions)
+      allow create: if request.auth != null;
+      // Allow only admin users to read feedback
+      allow read: if request.auth != null && 
+                  request.auth.token.email in ['sliceofbanana02@gmail.com', 'genesisjr.esdrilon@gmail.com'];
+      // Allow admin users to update feedback status
+      allow update: if request.auth != null && 
+                    request.auth.token.email in ['sliceofbanana02@gmail.com', 'genesisjr.esdrilon@gmail.com'] &&
+                    request.resource.data.keys().hasAll(['status']) &&
+                    request.resource.data.keys().hasOnly(['status', 'type', 'title', 'description', 'email', 'timestamp', 'userAgent', 'url']);
+    }
   }
 }

@@ -18,6 +18,19 @@ import {
 } from "firebase/firestore";
 import { db } from "./firebase";
 
+// Import new components
+import { JobEntry } from './types';
+import { calculateStats, filterJobs } from './utils';
+import AnalyticsDashboard from './components/AnalyticsDashboard';
+import AdvancedFilters, { FilterState } from './components/AdvancedFilters';
+import BulkActions from './components/BulkActions';
+import CalendarView from './components/CalendarView';
+import NotificationsPanel from './components/NotificationsPanel';
+import EnhancedJobModal from './components/EnhancedJobModal';
+import AboutPage from './components/AboutPage';
+import FeedbackAdmin from './components/FeedbackAdmin';
+import { isAdmin } from './utils/adminAuth';
+
 const statuses = ["Applied", "Interviewing", "Offer", "Rejected"];
 
 // Congratulatory quotes for job offers
@@ -92,21 +105,6 @@ const isValidUrl = (string: string): boolean => {
   }
 };
 
-interface JobEntry {
-  id: string;
-  uid: string;
-  company: string;
-  role: string;
-  link: string;
-  notes: string;
-  status: string;
-  salary?: string;
-  interviewDate?: string;
-  companyResearch?: string;
-  applicationTemplate?: string;
-  createdAt?: Timestamp;
-}
-
 export default function Home() {
   const { user, login, logout } = useAuth();
 
@@ -118,12 +116,22 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [draggedJobId, setDraggedJobId] = useState<string | null>(null);
   const [lastActionTime, setLastActionTime] = useState(0);
-  const [searchQuery, setSearchQuery] = useState("");
-  const [filterStatus, setFilterStatus] = useState<string>("all");
-  const [showStats, setShowStats] = useState(false);
   const [showAdvancedForm, setShowAdvancedForm] = useState(false);
   const [showCongratulationModal, setShowCongratulationModal] = useState(false);
   const [congratulationMessage, setCongratulationMessage] = useState("");
+
+  // New enhanced features state
+  const [currentView, setCurrentView] = useState<'kanban' | 'calendar' | 'analytics' | 'notifications' | 'about' | 'admin'>('kanban');
+  const [showEnhancedModal, setShowEnhancedModal] = useState(false);
+  const [editingJob, setEditingJob] = useState<JobEntry | null>(null);
+  const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
+  const [filters, setFilters] = useState<FilterState>({
+    searchQuery: "",
+    filterStatus: "all",
+    selectedTags: [],
+    salaryRange: [0, 300000],
+    dateRange: 'all'
+  });
 
   // Rate limiting helper
   const isRateLimited = (): boolean => {
@@ -135,6 +143,87 @@ export default function Home() {
     }
     setLastActionTime(now);
     return false;
+  };
+
+  // Enhanced functionality handlers
+  const handleJobSubmit = async (jobData: Partial<JobEntry>) => {
+    if (isRateLimited() || !user) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      if (editingJob) {
+        const jobRef = doc(db, "jobs", editingJob.id);
+        await updateDoc(jobRef, jobData);
+        setJobs((prev) => prev.map(job => job.id === editingJob.id ? { ...job, ...jobData } : job));
+        setEditingJob(null);
+      } else {
+        const newJobData = {
+          ...jobData,
+          status: jobData.status || "Applied",
+          uid: user.uid,
+          createdAt: Timestamp.now(),
+        };
+        const docRef = await addDoc(collection(db, "jobs"), newJobData);
+        setJobs((prev) => [{ id: docRef.id, ...newJobData } as JobEntry, ...prev]);
+      }
+    } catch {
+      setError("Failed to save job. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleBulkUpdate = async (jobIds: string[], updates: Partial<JobEntry>) => {
+    if (isRateLimited()) return;
+
+    setLoading(true);
+    setError(null);
+    try {
+      const promises = jobIds.map(async (jobId) => {
+        const jobRef = doc(db, "jobs", jobId);
+        await updateDoc(jobRef, updates);
+      });
+      
+      await Promise.all(promises);
+      
+      setJobs((prev) => prev.map(job => 
+        jobIds.includes(job.id) ? { ...job, ...updates } : job
+      ));
+      
+      setSelectedJobs([]);
+    } catch {
+      setError("Failed to update jobs. Please try again.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSelectAll = () => {
+    const filteredJobIds = filteredJobs.map(job => job.id);
+    setSelectedJobs(filteredJobIds);
+  };
+
+  const handleClearSelection = () => {
+    setSelectedJobs([]);
+  };
+
+  const toggleJobSelection = (jobId: string) => {
+    setSelectedJobs(prev => 
+      prev.includes(jobId) 
+        ? prev.filter(id => id !== jobId)
+        : [...prev, jobId]
+    );
+  };
+
+  const openEnhancedModal = (job?: JobEntry) => {
+    setEditingJob(job || null);
+    setShowEnhancedModal(true);
+  };
+
+  const closeEnhancedModal = () => {
+    setShowEnhancedModal(false);
+    setEditingJob(null);
   };
 
   // Close menu when clicking outside
@@ -161,19 +250,57 @@ export default function Home() {
       setLoading(true);
       setError(null);
       try {
-        const q = query(
-          collection(db, "jobs"),
-          where("uid", "==", user.uid),
-          orderBy("createdAt", "desc")
-        );
-        const querySnapshot = await getDocs(q);
-        const jobsData = querySnapshot.docs.map(doc => ({
-          id: doc.id,
-          ...doc.data()
-        })) as JobEntry[];
+        // Try multiple query strategies for maximum compatibility
+        let querySnapshot;
+        let jobsData: JobEntry[] = [];
+        
+        // Strategy 1: Try optimized query with orderBy (requires composite index)
+        try {
+          const optimizedQuery = query(
+            collection(db, "jobs"),
+            where("uid", "==", user.uid),
+            orderBy("createdAt", "desc")
+          );
+          querySnapshot = await getDocs(optimizedQuery);
+          jobsData = querySnapshot.docs.map(doc => ({
+            id: doc.id,
+            ...doc.data()
+          })) as JobEntry[];
+          console.log("✅ Loaded jobs with optimized query (composite index):", jobsData.length);
+        } catch {
+          console.log("⚠️ Composite index not available, trying fallback query...");
+          
+          // Strategy 2: Fallback to simple query without orderBy
+          try {
+            const simpleQuery = query(
+              collection(db, "jobs"),
+              where("uid", "==", user.uid)
+            );
+            querySnapshot = await getDocs(simpleQuery);
+            jobsData = querySnapshot.docs.map(doc => ({
+              id: doc.id,
+              ...doc.data()
+            })) as JobEntry[];
+            
+            // Sort in memory since we can't use orderBy
+            jobsData.sort((a, b) => {
+              if (!a.createdAt || !b.createdAt) return 0;
+              return b.createdAt.toMillis() - a.createdAt.toMillis();
+            });
+            console.log("✅ Loaded jobs with fallback query + client sorting:", jobsData.length);
+          } catch (fallbackError) {
+            console.error("❌ Both queries failed:", fallbackError);
+            // Only show error for new users if all queries fail
+            if (user) {
+              setError("Having trouble loading your jobs. Please refresh the page or check your connection.");
+            }
+            return;
+          }
+        }
+        
         setJobs(jobsData);
       } catch (err) {
-        console.error("Error fetching jobs:", err);
+        console.error("❌ Unexpected error in fetchJobs:", err);
         setError("Failed to load your jobs. Please refresh the page.");
       } finally {
         setLoading(false);
@@ -261,21 +388,6 @@ export default function Home() {
     }
   };
 
-  const handleEdit = (job: JobEntry) => {
-    setForm({ 
-      company: job.company, 
-      role: job.role, 
-      link: job.link, 
-      notes: job.notes,
-      salary: job.salary || "",
-      interviewDate: job.interviewDate || "",
-      companyResearch: job.companyResearch || "",
-      applicationTemplate: job.applicationTemplate || ""
-    });
-    setEditId(job.id);
-    setOpenMenuId(null);
-  };
-
   const handleDelete = async (id: string) => {
     if (isRateLimited()) return;
     
@@ -293,14 +405,24 @@ export default function Home() {
   };
 
   const onDragStart = (e: React.DragEvent<HTMLDivElement>, id: string) => {
-    e.dataTransfer.setData("jobId", id);
+    e.dataTransfer.setData("text/plain", id);
+    e.dataTransfer.effectAllowed = "move";
     setDraggedJobId(id);
   };
 
   const onDrop = async (e: React.DragEvent<HTMLDivElement>, newStatus: string) => {
-    const id = e.dataTransfer.getData("jobId");
+    e.preventDefault();
+    const id = e.dataTransfer.getData("text/plain");
+    if (!id) return;
+    
     const job = jobs.find(j => j.id === id);
-    const oldStatus = job?.status;
+    if (!job) return;
+    
+    const oldStatus = job.status;
+    if (oldStatus === newStatus) {
+      setDraggedJobId(null);
+      return;
+    }
     
     setLoading(true);
     setError(null);
@@ -315,7 +437,8 @@ export default function Home() {
         setCongratulationMessage(randomQuote);
         setShowCongratulationModal(true);
       }
-    } catch {
+    } catch (err) {
+      console.error("Error updating job status:", err);
       setError("Failed to update job status. Please try again.");
     } finally {
       setLoading(false);
@@ -325,40 +448,80 @@ export default function Home() {
 
   const onDragOver = (e: React.DragEvent<HTMLDivElement>) => {
     e.preventDefault();
+    e.dataTransfer.dropEffect = "move";
   };
 
-  // Filter and search functionality
-  const filteredJobs = jobs.filter(job => {
-    const matchesSearch = searchQuery === "" || 
-      job.company.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.role.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      job.notes.toLowerCase().includes(searchQuery.toLowerCase());
-    
-    const matchesFilter = filterStatus === "all" || job.status === filterStatus;
-    
-    return matchesSearch && matchesFilter;
-  });
+  // Filter and search functionality - Enhanced
+  const filteredJobs = filterJobs(
+    jobs, 
+    filters.searchQuery, 
+    filters.filterStatus,
+    filters.selectedTags,
+    filters.priority,
+    filters.isRemote,
+    filters.isFavorite
+  );
 
-  // Statistics calculation
-  const stats = {
-    total: jobs.length,
-    applied: jobs.filter(job => job.status === "Applied").length,
-    interviewing: jobs.filter(job => job.status === "Interviewing").length,
-    offers: jobs.filter(job => job.status === "Offer").length,
-    rejected: jobs.filter(job => job.status === "Rejected").length,
-    avgSalary: jobs.filter(job => job.salary && !isNaN(Number(job.salary)))
-      .reduce((sum, job) => sum + Number(job.salary), 0) / 
-      Math.max(jobs.filter(job => job.salary && !isNaN(Number(job.salary))).length, 1)
-  };
+  // Statistics calculation - Enhanced
+  const stats = calculateStats(jobs);
 
   return (
-    <div className="min-h-screen overflow-x-hidden flex items-center justify-center p-2 sm:p-4 lg:p-6" style={{ backgroundColor: '#333333' }}>
+    <div className="min-h-screen overflow-x-hidden p-2 sm:p-4 lg:p-6" style={{ backgroundColor: '#333333' }}>
       <Analytics />
-      <button onClick={logout} className="absolute top-2 right-2 sm:top-4 sm:right-4 px-3 py-2 sm:px-6 sm:py-3 rounded-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold text-sm sm:text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-red-400/50 z-50" aria-label="Logout">
+      <button onClick={logout} className="fixed top-2 right-2 sm:top-4 sm:right-4 px-3 py-2 sm:px-6 sm:py-3 rounded-lg bg-gradient-to-r from-red-500 to-red-600 hover:from-red-600 hover:to-red-700 text-white font-bold text-sm sm:text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-red-400/50 z-50" aria-label="Logout">
         <span className="hidden sm:inline">🚪 Logout</span>
         <span className="sm:hidden">🚪</span>
       </button>
-      <div className="relative w-full max-w-7xl p-4 sm:p-6 lg:p-8 rounded-2xl backdrop-blur-md bg-gradient-to-br from-purple-600 to-blue-700 border border-white/20 overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.1),_0_0_50px_0_rgba(0,255,255,0.2)_inset,_0_0_50px_0_rgba(255,0,255,0.2)_inset]">
+      <div className="flex items-start justify-center gap-0">
+        {/* Left Sidebar - View Switcher - Follows scroll without scrollbar */}
+        <div className="hidden lg:flex flex-col gap-3 pt-8 sticky top-4 self-start">
+          {[
+            { key: 'kanban', label: '📋 Kanban', icon: '📋' },
+            { key: 'calendar', label: '📅 Calendar', icon: '📅' },
+            { key: 'analytics', label: '📊 Analytics', icon: '📊' },
+            { key: 'notifications', label: '🔔 Notifications', icon: '🔔' },
+            { key: 'about', label: '📖 About', icon: '📖' },
+            ...(isAdmin(user) ? [{ key: 'admin', label: '⚙️ Admin', icon: '⚙️' }] : [])
+          ].map(view => (
+            <button
+              key={view.key}
+              onClick={() => setCurrentView(view.key as 'kanban' | 'calendar' | 'analytics' | 'notifications' | 'about' | 'admin')}
+              className={`relative px-4 py-3 font-bold text-sm transition-all duration-300 min-w-[140px] text-left border ${
+                currentView === view.key
+                  ? 'bg-purple-600 text-white transform scale-105 border-white/20 backdrop-blur-md shadow-[0_0_0_1px_rgba(255,255,255,0.1),_0_0_50px_0_rgba(0,255,255,0.2)_inset,_0_0_50px_0_rgba(255,0,255,0.2)_inset] rounded-l-2xl border-r-0'
+                  : 'bg-white/10 text-white/70 hover:bg-white/20 hover:scale-102 border-white/10 border-r-0'
+              }`}
+            >
+              <span className="relative z-10">{view.label}</span>
+            </button>
+          ))}
+        </div>
+
+        {/* Mobile View Switcher */}
+        <div className="lg:hidden w-full mb-6 flex flex-wrap gap-2 justify-center">
+          {[
+            { key: 'kanban', label: '📋 Kanban', icon: '📋' },
+            { key: 'calendar', label: '📅 Calendar', icon: '📅' },
+            { key: 'analytics', label: '📊 Analytics', icon: '📊' },
+            { key: 'notifications', label: '🔔 Notifications', icon: '🔔' },
+            { key: 'about', label: '📖 About', icon: '📖' },
+            ...(isAdmin(user) ? [{ key: 'admin', label: '⚙️ Admin', icon: '⚙️' }] : [])
+          ].map(view => (
+            <button
+              key={view.key}
+              onClick={() => setCurrentView(view.key as 'kanban' | 'calendar' | 'analytics' | 'notifications' | 'about' | 'admin')}
+              className={`px-4 py-2 rounded-lg font-bold text-sm transition-all duration-200 ${
+                currentView === view.key
+                  ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-white shadow-lg'
+                  : 'bg-white/10 text-white/70 hover:bg-white/20'
+              }`}
+            >
+              {view.label}
+            </button>
+          ))}
+        </div>
+
+        <div className="relative w-full max-w-6xl p-4 sm:p-6 lg:p-8 rounded-2xl backdrop-blur-md bg-gradient-to-br from-purple-600 to-blue-700 border border-white/20 overflow-hidden shadow-[0_0_0_1px_rgba(255,255,255,0.1),_0_0_50px_0_rgba(0,255,255,0.2)_inset,_0_0_50px_0_rgba(255,0,255,0.2)_inset]">
         {/* Neon corners */}
         <div className="absolute top-0 right-0 w-24 h-24 sm:w-36 sm:h-36 bg-cyan-400/30 rounded-full blur-[60px] sm:blur-[80px] border-t-2 border-r-2 border-cyan-300/40 pointer-events-none" style={{ transform: 'translate(50%, -50%)' }} />
         <div className="absolute bottom-0 left-0 w-24 h-24 sm:w-36 sm:h-36 bg-fuchsia-500/30 rounded-full blur-[60px] sm:blur-[80px] border-b-2 border-l-2 border-fuchsia-400/40 pointer-events-none" style={{ transform: 'translate(-50%, 50%)' }} />
@@ -368,75 +531,79 @@ export default function Home() {
         {/* Error and Loading Feedback */}
         {error && !loading && <div className="mb-4 text-center text-red-400 font-semibold animate-pulse">{error}</div>}
         {loading && <div className="mb-4 text-center text-cyan-400 font-semibold animate-pulse">Loading...</div>}
-
-        {/* Advanced Search and Filter */}
-        <div className="mb-4 sm:mb-6 p-3 sm:p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/20">
-          <div className="flex flex-col sm:flex-row flex-wrap gap-3 sm:gap-4 items-stretch sm:items-center">
-            <div className="flex-1 min-w-[200px]">
-              <input
-                type="text"
-                placeholder="🔍 Search jobs by company, role, or notes..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full px-3 sm:px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white placeholder:text-white/60 focus:outline-none focus:ring-2 focus:ring-cyan-400 text-sm sm:text-base"
-              />
+        
+        {/* Welcome Message for New Users */}
+        {!loading && !error && jobs.length === 0 && (
+          <div className="mb-6 p-4 sm:p-6 rounded-xl bg-gradient-to-br from-green-800/50 to-emerald-800/50 backdrop-blur-md border border-green-400/30 text-center">
+            <div className="text-4xl sm:text-6xl mb-3 sm:mb-4">🎯</div>
+            <h3 className="text-xl sm:text-2xl font-bold text-green-300 mb-2 sm:mb-3">Welcome to your Job Tracker!</h3>
+            <p className="text-sm sm:text-base text-white/80 mb-3 sm:mb-4">
+              Ready to take control of your job search? Start by adding your first application below. 
+              Track applications, manage interviews, and celebrate your offers! 🚀
+            </p>
+            <div className="text-xs sm:text-sm text-green-200 italic">
+              💡 Tip: Use the drag-and-drop feature to move jobs between status columns as you progress!
             </div>
-            <select
-              value={filterStatus}
-              onChange={(e) => setFilterStatus(e.target.value)}
-              className="px-3 sm:px-4 py-2 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400 text-sm sm:text-base"
-            >
-              <option value="all" className="bg-gray-800">All Status</option>
-              <option value="Applied" className="bg-gray-800">Applied</option>
-              <option value="Interviewing" className="bg-gray-800">Interviewing</option>
-              <option value="Offer" className="bg-gray-800">Offer</option>
-              <option value="Rejected" className="bg-gray-800">Rejected</option>
-            </select>
-            <button
-              onClick={() => setShowStats(!showStats)}
-              className="px-4 sm:px-6 py-2 sm:py-3 rounded-lg bg-gradient-to-r from-purple-500 to-purple-600 hover:from-purple-600 hover:to-purple-700 text-white font-bold shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-purple-400/50 text-sm sm:text-base"
-            >
-              📊 Stats
-            </button>
           </div>
-        </div>
+        )}
 
-        {/* Statistics Dashboard */}
-        {showStats && (
-          <div className="mb-4 sm:mb-6 p-3 sm:p-6 rounded-xl bg-gradient-to-br from-gray-800/80 to-gray-900/80 backdrop-blur-md border border-white/20">
-            <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-cyan-300 mb-3 sm:mb-4">� Application Statistics</h3>
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3 sm:gap-4">
-              <div className="text-center p-3 sm:p-4 rounded-lg bg-white/10">
-                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-blue-300">{stats.total}</div>
-                <div className="text-xs sm:text-sm text-gray-300">Total</div>
-              </div>
-              <div className="text-center p-3 sm:p-4 rounded-lg bg-white/10">
-                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-yellow-300">{stats.applied}</div>
-                <div className="text-xs sm:text-sm text-gray-300">Applied</div>
-              </div>
-              <div className="text-center p-3 sm:p-4 rounded-lg bg-white/10">
-                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-orange-300">{stats.interviewing}</div>
-                <div className="text-xs sm:text-sm text-gray-300">Interviewing</div>
-              </div>
-              <div className="text-center p-3 sm:p-4 rounded-lg bg-white/10">
-                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-300">{stats.offers}</div>
-                <div className="text-xs sm:text-sm text-gray-300">Offers</div>
-              </div>
-              <div className="text-center p-3 sm:p-4 rounded-lg bg-white/10 col-span-2 sm:col-span-1">
-                <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-red-300">{stats.rejected}</div>
-                <div className="text-xs sm:text-sm text-gray-300">Rejected</div>
-              </div>
+        {/* Enhanced Filters */}
+        <AdvancedFilters 
+          jobs={jobs}
+          onFiltersChange={setFilters}
+          className="mb-6"
+        />
+
+        {/* View-Specific Content */}
+        {currentView === 'analytics' && (
+          <AnalyticsDashboard stats={stats} className="mb-6" />
+        )}
+        
+        {currentView === 'calendar' && (
+          <CalendarView 
+            jobs={jobs}
+            onDateClick={(date) => console.log('Date clicked:', date)}
+            className="mb-6"
+          />
+        )}
+        
+        {currentView === 'notifications' && (
+          <NotificationsPanel 
+            jobs={jobs}
+            className="mb-6"
+          />
+        )}
+
+        {currentView === 'about' && (
+          <AboutPage className="mb-6" />
+        )}
+
+        {currentView === 'admin' && (
+          isAdmin(user) ? (
+            <FeedbackAdmin />
+          ) : (
+            <div className="p-8 text-center">
+              <div className="text-6xl mb-4">🔒</div>
+              <h2 className="text-2xl font-bold text-white mb-4">Admin Access Required</h2>
+              <p className="text-white/60">You don&apos;t have permission to access the admin panel.</p>
             </div>
-            {stats.avgSalary > 0 && (
-              <div className="mt-3 sm:mt-4 p-3 sm:p-4 rounded-lg bg-gradient-to-r from-green-800/50 to-emerald-800/50">
-                <div className="text-center">
-                  <div className="text-xl sm:text-2xl lg:text-3xl font-bold text-green-300">${stats.avgSalary.toLocaleString()}</div>
-                  <div className="text-xs sm:text-sm text-gray-300">Average Expected Salary</div>
-                </div>
-              </div>
-            )}
-          </div>
-        )}        {/* Form Section */}
+          )
+        )}
+
+        {/* Kanban View */}
+        {currentView === 'kanban' && (
+          <>
+            {/* Quick Add Button */}
+            <div className="mb-6 flex justify-center">
+              <button
+                onClick={() => openEnhancedModal()}
+                className="px-6 py-3 rounded-lg bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-600 hover:to-emerald-700 text-white font-bold text-lg shadow-lg hover:shadow-xl transform hover:scale-105 transition-all duration-200 border-2 border-green-400/50"
+              >
+                ➕ Add New Application
+              </button>
+            </div>
+
+        {/* Form Section */}
         <div className="mb-6 sm:mb-10">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-3 sm:mb-4 gap-2 sm:gap-0">
             <h2 className="text-lg sm:text-xl font-bold text-white">Add New Application</h2>
@@ -509,14 +676,25 @@ export default function Home() {
                   {statusJobs.map(job => (
                     <div
                       key={job.id}
-                      className={`relative border border-gray-300 rounded-lg p-3 sm:p-4 space-y-2 hover:shadow-md transition w-full bg-white ${job.status === 'Rejected' ? 'opacity-50' : ''} ${draggedJobId === job.id ? 'ring-2 ring-fuchsia-400' : ''}`}
-                      draggable
+                      className={`relative border border-gray-300 rounded-lg p-3 sm:p-4 space-y-2 hover:shadow-md transition w-full bg-white cursor-move ${job.status === 'Rejected' ? 'opacity-50' : ''} ${draggedJobId === job.id ? 'ring-2 ring-fuchsia-400 opacity-75' : ''} ${selectedJobs.includes(job.id) ? 'ring-2 ring-cyan-400' : ''}`}
+                      draggable={true}
                       onDragStart={(e) => onDragStart(e, job.id)}
                       onDragEnd={() => setDraggedJobId(null)}
                       aria-grabbed={draggedJobId === job.id}
                     >
+                      {/* Selection Checkbox */}
+                      <div className="absolute top-2 left-2">
+                        <input
+                          type="checkbox"
+                          checked={selectedJobs.includes(job.id)}
+                          onChange={() => toggleJobSelection(job.id)}
+                          className="w-4 h-4 text-cyan-600 bg-gray-100 border-gray-300 rounded focus:ring-cyan-500 cursor-pointer"
+                          onClick={(e) => e.stopPropagation()}
+                        />
+                      </div>
+
                       <div className="flex justify-between items-start">
-                        <div className={`text-base sm:text-lg break-words font-bold ${job.status === 'Offer' ? 'text-green-600' : job.status === 'Rejected' ? 'text-red-600' : 'text-gray-800'}`}>{job.role}</div>
+                        <div className={`text-base sm:text-lg break-words font-bold ml-6 ${job.status === 'Offer' ? 'text-green-600' : job.status === 'Rejected' ? 'text-red-600' : 'text-gray-800'}`}>{job.role}</div>
                         {/* 3-dot dropdown */}
                         <div className="relative">
                           <button
@@ -532,7 +710,7 @@ export default function Home() {
                               <button 
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handleEdit(job);
+                                  openEnhancedModal(job);
                                 }} 
                                 className="px-3 py-1 text-sm text-gray-700 text-left hover:bg-gray-100 rounded cursor-pointer" 
                                 aria-label="Edit job"
@@ -581,9 +759,42 @@ export default function Home() {
                           )}
                         </div>
                       </div>
-                      <div className="text-xs sm:text-sm text-gray-600 break-words">{job.company}</div>
+                      <div className="text-xs sm:text-sm text-gray-600 break-words flex items-center gap-2">
+                        {job.company}
+                        {job.isFavorite && <span className="text-yellow-500">⭐</span>}
+                        {job.priority && (
+                          <span className={`text-xs px-2 py-1 rounded-full ${
+                            job.priority === 'high' ? 'bg-red-100 text-red-600' :
+                            job.priority === 'medium' ? 'bg-yellow-100 text-yellow-600' :
+                            'bg-green-100 text-green-600'
+                          }`}>
+                            {job.priority === 'high' ? '🔴' : job.priority === 'medium' ? '🟡' : '🟢'} {job.priority}
+                          </span>
+                        )}
+                        {job.isRemote && <span className="text-xs bg-blue-100 text-blue-600 px-2 py-1 rounded-full">🏠 Remote</span>}
+                      </div>
+                      
+                      {/* Tags */}
+                      {job.tags && job.tags.length > 0 && (
+                        <div className="flex flex-wrap gap-1">
+                          {job.tags.slice(0, 3).map((tag, index) => (
+                            <span key={index} className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                              #{tag}
+                            </span>
+                          ))}
+                          {job.tags.length > 3 && (
+                            <span className="text-xs text-gray-500">+{job.tags.length - 3} more</span>
+                          )}
+                        </div>
+                      )}
                       {job.salary && (
                         <div className="text-xs sm:text-sm text-green-600 font-semibold">💰 ${Number(job.salary).toLocaleString()}</div>
+                      )}
+                      {job.location && (
+                        <div className="text-xs sm:text-sm text-blue-600">📍 {job.location}</div>
+                      )}
+                      {job.jobType && (
+                        <div className="text-xs sm:text-sm text-purple-600">💼 {job.jobType}</div>
                       )}
                       {job.interviewDate && (
                         <div className="text-xs sm:text-sm text-blue-600">📅 {new Date(job.interviewDate).toLocaleDateString()}</div>
@@ -615,27 +826,56 @@ export default function Home() {
             );
           })}
         </div>
+          </>
+        )}
+
+        {/* Bulk Actions for Kanban View */}
+        {currentView === 'kanban' && (
+          <BulkActions
+            selectedJobs={selectedJobs}
+            jobs={jobs}
+            onBulkUpdate={handleBulkUpdate}
+            onSelectAll={handleSelectAll}
+            onClearSelection={handleClearSelection}
+          />
+        )}
+
+        {/* Enhanced Job Modal */}
+        <EnhancedJobModal
+          isOpen={showEnhancedModal}
+          onClose={closeEnhancedModal}
+          onSubmit={handleJobSubmit}
+          editingJob={editingJob}
+        />
       </div>
 
       {/* Congratulations Modal */}
       {showCongratulationModal && (
-        <div className="modal modal-open">
-          <div className="modal-box relative bg-gradient-to-br from-green-400 to-emerald-500 text-white border-4 border-green-300 shadow-2xl max-w-xs sm:max-w-md mx-4">
+        <div className="fixed inset-0 flex items-center justify-center z-50">
+          {/* Background overlay with 60% opacity */}
+          <div 
+            className="absolute inset-0" 
+            style={{ backgroundColor: 'rgba(51, 51, 51, 0.6)' }}
+            onClick={() => setShowCongratulationModal(false)}
+          ></div>
+          
+          {/* Modal content */}
+          <div className="relative bg-gradient-to-br from-green-400 to-emerald-500 text-white border-4 border-green-300 shadow-2xl max-w-xs sm:max-w-md mx-4 rounded-2xl p-6 sm:p-8 z-10">
             <button 
-              className="btn btn-sm btn-circle absolute right-2 top-2 bg-white/20 hover:bg-white/30 border-none text-white"
+              className="absolute right-2 top-2 w-8 h-8 sm:w-10 sm:h-10 rounded-full bg-white/20 hover:bg-white/30 text-white font-bold text-lg sm:text-xl flex items-center justify-center transition-all duration-200"
               onClick={() => setShowCongratulationModal(false)}
             >
               ✕
             </button>
-            <div className="text-center py-6 sm:py-8">
+            <div className="text-center py-2 sm:py-4">
               <div className="text-4xl sm:text-6xl mb-3 sm:mb-4">🎉</div>
               <h3 className="font-bold text-xl sm:text-2xl mb-3 sm:mb-4">Congratulations!</h3>
               <p className="text-base sm:text-lg leading-relaxed px-2 sm:px-4">
                 {congratulationMessage.replace(/^🎉|🌟|🚀|💪|🎊|✨|🏆|🎯|🌈|💎|🔥|⭐\s*/, '')}
               </p>
-              <div className="modal-action justify-center mt-6 sm:mt-8">
+              <div className="flex justify-center mt-6 sm:mt-8">
                 <button 
-                  className="btn bg-white text-green-600 hover:bg-green-50 border-none font-bold px-6 sm:px-8 text-sm sm:text-base"
+                  className="bg-white text-green-600 hover:bg-green-50 font-bold px-6 sm:px-8 py-2 sm:py-3 rounded-lg text-sm sm:text-base transition-all duration-200 hover:shadow-lg"
                   onClick={() => setShowCongratulationModal(false)}
                 >
                   Thank you! 🙏
@@ -643,9 +883,9 @@ export default function Home() {
               </div>
             </div>
           </div>
-          <div className="modal-backdrop bg-black/50" onClick={() => setShowCongratulationModal(false)}></div>
         </div>
       )}
+      </div>
     </div>
   );
 }

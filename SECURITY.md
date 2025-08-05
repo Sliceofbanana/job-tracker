@@ -1,28 +1,5 @@
 # Security Guide for Job Tracker Application
 
-## 🚨 IMMEDIATE ACTIONS REQUIRED
-
-### 1. **REVOKE EXPOSED API KEY**
-Your Firebase API key was exposed in the repository. You must:
-
-1. Go to [Google Cloud Console](https://console.cloud.google.com/)
-2. Select your project: `job-tracker-169f2`
-3. Navigate to APIs & Services > Credentials
-4. Find the API key: `AIzaSyD5zDLFRw-9RZBrC_4KCqHkuTrG1iKouKU`
-5. **DELETE OR REGENERATE** this key immediately
-6. Create a new API key with proper restrictions
-
-### 2. **Set up API Key Restrictions**
-For your new API key:
-- **Application restrictions**: HTTP referrers (web sites)
-- **Add your domains**: 
-  - `localhost:3000` (development)
-  - `yourdomain.com` (production)
-- **API restrictions**: Select specific APIs only:
-  - Firebase Authentication API
-  - Cloud Firestore API
-  - Identity Toolkit API
-
 ## 🔒 Security Features Implemented
 
 ### Environment Variables
