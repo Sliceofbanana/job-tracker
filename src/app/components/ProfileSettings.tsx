@@ -155,23 +155,6 @@ export default function ProfileSettings({ className = "", onClose, jobs = [] }: 
             <AnalyticsDashboard stats={stats} className="" />
           </div>
 
-          {/* Currency Settings */}
-          <div className="mb-4 sm:mb-6 p-4 sm:p-6 rounded-xl bg-gradient-to-br from-green-800/30 to-emerald-800/30 backdrop-blur-md border border-green-400/30">
-            <div className="mb-4">
-              <h3 className="text-lg sm:text-xl font-bold text-green-300 mb-2 flex items-center gap-2">
-                💰 Currency & Region Settings
-              </h3>
-              <p className="text-sm text-white/70 mb-4">
-                Set your preferred currency and region for salary displays in your job applications.
-              </p>
-            </div>
-            <CurrencySettings 
-              currentCountry={country}
-              onCountryChange={updateCountry}
-              className="w-full"
-            />
-          </div>
-
           {/* Feedback Section */}
           <div className="mb-4 sm:mb-6 p-4 sm:p-6 rounded-xl bg-gradient-to-br from-blue-800/30 to-purple-800/30 backdrop-blur-md border border-blue-400/30">
             <div className="mb-4">
