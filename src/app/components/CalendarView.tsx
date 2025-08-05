@@ -1,7 +1,8 @@
 "use client";
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { JobEntry, CalendarEvent } from '../types';
+import { getGoogleCalendar } from '../utils/googleCalendar';
 
 interface CalendarViewProps {
   jobs: JobEntry[];
@@ -12,6 +13,13 @@ interface CalendarViewProps {
 export default function CalendarView({ jobs, onDateClick, className = "" }: CalendarViewProps) {
   const [currentDate, setCurrentDate] = useState(new Date());
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
+  const [isGoogleCalendarConnected, setIsGoogleCalendarConnected] = useState(false);
+
+  // Check Google Calendar connection status
+  useEffect(() => {
+    const calendar = getGoogleCalendar();
+    setIsGoogleCalendarConnected(calendar.isUserSignedIn());
+  }, []);
 
   // Generate calendar events from jobs
   const events: CalendarEvent[] = jobs.flatMap(job => {
@@ -107,6 +115,18 @@ export default function CalendarView({ jobs, onDateClick, className = "" }: Cale
 
   return (
     <div className={`p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/20 ${className}`}>
+      {/* Google Calendar Sync Status */}
+      {isGoogleCalendarConnected && (
+        <div className="mb-4 p-3 rounded-lg bg-green-500/20 border border-green-400/30 flex items-center gap-2">
+          <span className="text-green-400">📅</span>
+          <div className="flex-1">
+            <span className="text-green-300 font-medium">Google Calendar Sync Active</span>
+            <p className="text-xs text-white/70">Events are automatically synced with your Google Calendar</p>
+          </div>
+          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
+        </div>
+      )}
+
       {/* Calendar Header */}
       <div className="flex items-center justify-between mb-6">
         <button
@@ -251,6 +271,11 @@ export default function CalendarView({ jobs, onDateClick, className = "" }: Cale
             <div className="w-3 h-3 rounded-full bg-purple-500"></div>
             <span className="text-xs text-white/70">Follow-ups</span>
           </div>
+          {isGoogleCalendarConnected && (
+            <div className="flex items-center gap-2 ml-auto">
+              <span className="text-xs text-green-300">📅 Synced with Google Calendar</span>
+            </div>
+          )}
         </div>
       </div>
     </div>

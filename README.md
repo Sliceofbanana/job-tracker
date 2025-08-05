@@ -1,6 +1,15 @@
 # 🎯 Job Application Tracker
 
-A comprehensive, secure job application tracking system built with Next.js, Firebase, and stunning glassmorphism design. Perfect for both professionals seeking new opportunities and students looking for internships. Track applications, manage interviews, analyze your job search progress, and celebrate your success!
+A comprehensive, s### 📅 **Google Calendar Integration**
+- **Automatic Event Creation**: Sync job applications, interviews, and follow-ups with Google Calendar
+- **Smart Reminders**: Automatic email and popup reminders for important dates
+- **Interview Preparation**: Events include preparation tips and company research
+- **Multi-Device Sync**: Access your job schedule across all devices
+- **Event Color Coding**: Different colors for applications (blue), interviews (yellow), and follow-ups (green)
+- **Detailed Descriptions**: Rich event descriptions with job details and action items
+- **One-Click Disconnect**: Easy privacy control with instant disconnection option
+
+### 📊 **Analytics & Insights**cure job application tracking system built with Next.js, Firebase, and stunning glassmorphism design. Perfect for both professionals seeking new opportunities and students looking for internships. Track applications, manage interviews, analyze your job search progress, and celebrate your success!
 
 ## ✨ Features
 

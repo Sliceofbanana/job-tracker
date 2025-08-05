@@ -24,6 +24,12 @@ export interface JobEntry {
   companySize?: string;
   industry?: string;
   jobType?: 'full-time' | 'part-time' | 'contract' | 'internship';
+  // Google Calendar integration
+  googleCalendarEvents?: {
+    applicationEventId?: string;
+    interviewEventId?: string;
+    followUpEventId?: string;
+  };
 }
 
 export interface ApplicationTemplate {

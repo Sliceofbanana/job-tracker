@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { JobEntry } from '../types';
+import CurrencySettings, { useCurrencySettings } from './CurrencySettings';
 
 interface EnhancedJobModalProps {
   isOpen: boolean;
@@ -18,6 +19,7 @@ export default function EnhancedJobModal({
   editingJob,
   className = "" 
 }: EnhancedJobModalProps) {
+  const { country, updateCountry } = useCurrencySettings();
   const [formData, setFormData] = useState<Partial<JobEntry>>({
     company: '',
     role: '',
@@ -171,24 +173,37 @@ export default function EnhancedJobModal({
                 />
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-white/80 mb-2">
-                  Status
-                </label>
-                <select
-                  value={formData.status || 'Applied'}
-                  onChange={(e) => handleInputChange('status', e.target.value)}
-                  className="w-full px-4 py-3 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
-                >
-                  <option value="Applied" className="bg-gray-800">Applied</option>
-                  <option value="Interviewing" className="bg-gray-800">Interviewing</option>
-                  <option value="Offer" className="bg-gray-800">Offer</option>
-                  <option value="Rejected" className="bg-gray-800">Rejected</option>
-                </select>
+                <div>
+                  <label className="block text-sm font-medium text-white/80 mb-2">
+                    Status
+                  </label>
+                  <select
+                    value={formData.status || 'Applied'}
+                    onChange={(e) => handleInputChange('status', e.target.value)}
+                    className="w-full px-4 py-3 rounded-lg bg-white/10 backdrop-blur-md border border-white/20 text-white focus:outline-none focus:ring-2 focus:ring-cyan-400"
+                  >
+                    <option value="Applied" className="bg-gray-800">Applied</option>
+                    <option value="Interviewing" className="bg-gray-800">Interviewing</option>
+                    <option value="Accepted" className="bg-gray-800">Accepted</option>
+                    <option value="Rejected" className="bg-gray-800">Rejected</option>
+                  </select>
+                </div>
               </div>
-            </div>
 
-            {/* Priority and Quick Actions */}
+              {/* Currency Settings */}
+              <div className="mb-4">
+                <label className="block text-sm font-medium text-white/80 mb-2">
+                  Currency Settings
+                </label>
+                <CurrencySettings 
+                  currentCountry={country}
+                  onCountryChange={updateCountry}
+                  className=""
+                />
+                <p className="text-xs text-white/60 mt-2">
+                  💡 This setting affects how salaries are displayed throughout the app
+                </p>
+              </div>            {/* Priority and Quick Actions */}
             <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
               <div>
                 <label className="block text-sm font-medium text-white/80 mb-2">
