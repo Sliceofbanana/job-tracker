@@ -60,9 +60,34 @@ export default function GoogleCalendarSettings({ className = "", onConnectionCha
       } else {
         setError('Failed to connect to Google Calendar. Please try again.');
       }
-    } catch (err) {
+    } catch (err: unknown) {
       console.error('Calendar connection error:', err);
-      setError('Error connecting to Google Calendar. Please check your permissions.');
+      
+      // More specific error handling
+      let errorMessage = 'Error connecting to Google Calendar.';
+      
+      const error = err as { error?: string; details?: string; message?: string };
+      
+      if (error.error === 'popup_blocked_by_browser') {
+        errorMessage = 'Pop-up blocked. Please allow pop-ups for this site and try again.';
+      } else if (error.error === 'access_denied') {
+        errorMessage = 'Access denied. Please grant calendar permissions and try again.';
+      } else if (error.error === 'invalid_client') {
+        errorMessage = 'Invalid client configuration. Please check your Google Cloud Console settings.';
+      } else if (error.error === 'origin_mismatch') {
+        errorMessage = 'Origin not authorized. Please add your domain to authorized JavaScript origins in Google Cloud Console.';
+      } else if (error.error === 'idpiframe_initialization_failed') {
+        errorMessage = 'Google API initialization failed. Please check your client ID and try again.';
+      } else if (error.details) {
+        errorMessage = `Google Calendar error: ${error.details}`;
+      } else if (error.message) {
+        errorMessage = `Connection error: ${error.message}`;
+      }
+      
+      // Log the full error for debugging
+      console.error('Full error object:', JSON.stringify(err, null, 2));
+      
+      setError(errorMessage);
     } finally {
       setIsLoading(false);
     }
