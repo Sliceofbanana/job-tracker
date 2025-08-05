@@ -1,5 +1,4 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { headers } from 'next/headers';
 
 // Server-side rate limiting storage
 const rateLimitStore = new Map<string, {

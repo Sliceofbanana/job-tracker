@@ -2,7 +2,7 @@
  * React Hooks for Password Validation and Input Sanitization
  */
 
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { 
   validatePassword, 
   PasswordValidationResult, 
@@ -88,9 +88,9 @@ export const usePasswordAttemptLimit = (identifier: string) => {
     setAttemptInfo(checkPasswordAttemptLimit(identifier));
   };
 
-  const refreshAttemptInfo = () => {
+  const refreshAttemptInfo = useCallback(() => {
     setAttemptInfo(checkPasswordAttemptLimit(identifier));
-  };
+  }, [identifier]);
 
   useEffect(() => {
     // Refresh attempt info periodically if locked out

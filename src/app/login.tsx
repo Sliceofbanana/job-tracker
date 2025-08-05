@@ -233,7 +233,7 @@ export default function Login({ onLogin }: LoginProps) {
                   )}
 
                   <div>
-                    <label className="block text-white text-xs sm:text-sm font-medium mb-1 sm:mb-2">
+                    <label className="block text-gray-800 text-xs sm:text-sm font-medium mb-1 sm:mb-2">
                       Email
                     </label>
                     <SanitizedInput
@@ -249,7 +249,7 @@ export default function Login({ onLogin }: LoginProps) {
                   </div>
 
                   <div>
-                    <label className="block text-white text-xs sm:text-sm font-medium mb-1 sm:mb-2">
+                    <label className="block text-gray-800 text-xs sm:text-sm font-medium mb-1 sm:mb-2">
                       Password
                     </label>
                     <SecurePasswordInput
@@ -268,7 +268,7 @@ export default function Login({ onLogin }: LoginProps) {
 
                   {isSignUp && (
                     <div>
-                      <label className="block text-white text-xs sm:text-sm font-medium mb-1 sm:mb-2">
+                      <label className="block text-gray-800 text-xs sm:text-sm font-medium mb-1 sm:mb-2">
                         Confirm Password
                       </label>
                       <SecurePasswordInput
