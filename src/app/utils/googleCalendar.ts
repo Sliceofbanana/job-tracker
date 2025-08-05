@@ -38,76 +38,36 @@ export class GoogleCalendarIntegration {
   // Initialize Google API
   private async initializeGapi(): Promise<void> {
     try {
-      // Check if we're in browser environment
       if (typeof window === 'undefined') {
         throw new Error('Google Calendar API can only be used in browser environment');
       }
 
-      // Check environment variables
       if (!process.env.NEXT_PUBLIC_GOOGLE_API_KEY || !process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
-        console.error('Missing environment variables:');
-        console.error('NEXT_PUBLIC_GOOGLE_API_KEY:', !!process.env.NEXT_PUBLIC_GOOGLE_API_KEY);
-        console.error('NEXT_PUBLIC_GOOGLE_CLIENT_ID:', !!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
         throw new Error('Google Calendar API configuration missing. Please check your environment variables.');
       }
 
-      console.log('🔧 Initializing Google Calendar API...');
-      console.log('Current origin:', window.location.origin);
-      console.log('Client ID:', process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID);
-
-      // Load Google API script
       if (!window.gapi) {
-        console.log('📜 Loading Google API script...');
         await this.loadGapiScript();
       }
 
-      // Wait for gapi to be ready with proper error handling
       await new Promise<void>((resolve, reject) => {
         let attempts = 0;
-        const maxAttempts = 20; // Increased attempts
+        const maxAttempts = 20;
         
         const checkGapi = (): void => {
           attempts++;
-          console.log(`🔄 Checking Google API availability (attempt ${attempts}/${maxAttempts})`);
-          
           if (window.gapi && window.gapi.load) {
-            try {
-              // Try the newer callback approach first, fallback to simple approach
-              const loadCallback = (): void => {
-                console.log('✅ Google API client modules loaded');
-                resolve();
-              };
-              const errorCallback = (): void => {
-                console.error('❌ Failed to load Google API client modules');
-                reject(new Error('Failed to load Google API client modules'));
-              };
-              
-              // Use function overload that accepts callback and onerror
-              const gapiLoad = window.gapi.load as (api: string, callback: () => void, onerror?: () => void) => void;
-              gapiLoad('client:auth2', loadCallback, errorCallback);
-            } catch {
-              // Fallback to simple approach
-              console.log('🔄 Using fallback Google API loading method');
-              window.gapi.load('client:auth2', () => resolve());
-            }
+            window.gapi.load('client:auth2', () => resolve());
           } else if (attempts < maxAttempts) {
             setTimeout(checkGapi, 300);
           } else {
-            console.error('❌ Google API not available after timeout');
-            console.log('Possible causes:');
-            console.log('- Content Security Policy blocking Google APIs');
-            console.log('- Network connectivity issues');
-            console.log('- Browser privacy settings blocking third-party scripts');
-            reject(new Error('Google API not available after timeout. Please check your internet connection and Content Security Policy.'));
+            reject(new Error('Google API not available. Check your internet connection and Content Security Policy.'));
           }
         };
         
         checkGapi();
       });
 
-      console.log('🚀 Initializing Google API client...');
-
-      // Initialize the client
       await window.gapi.client.init({
         apiKey: process.env.NEXT_PUBLIC_GOOGLE_API_KEY,
         clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
@@ -118,49 +78,11 @@ export class GoogleCalendarIntegration {
       this.gapi = window.gapi;
       this.isInitialized = true;
       
-      // Check auth status safely
-      try {
-        const authInstance = this.gapi.auth2.getAuthInstance();
-        if (authInstance) {
-          this.isSignedIn = authInstance.isSignedIn.get();
-          console.log('🔐 Current auth status:', this.isSignedIn ? 'Signed in' : 'Not signed in');
-        } else {
-          console.warn('⚠️ Auth instance not available');
-          this.isSignedIn = false;
-        }
-      } catch (authError) {
-        console.warn('Auth instance not ready:', authError);
-        this.isSignedIn = false;
-      }
+      const authInstance = this.gapi.auth2.getAuthInstance();
+      this.isSignedIn = authInstance ? authInstance.isSignedIn.get() : false;
       
-      console.log('✅ Google Calendar API initialized successfully');
     } catch (error) {
       this.initializationError = error instanceof Error ? error : new Error('Unknown initialization error');
-      
-      // Enhanced error logging for debugging
-      console.error('❌ Google Calendar API initialization failed:', error);
-      
-      if (error instanceof Error) {
-        if (error.message.includes('Content Security Policy')) {
-          console.error('🚨 CSP Issue: Content Security Policy is blocking Google APIs');
-          console.log('Solutions:');
-          console.log('1. Check next.config.ts CSP settings');
-          console.log('2. Ensure Google API domains are allowed');
-        } else if (error.message.includes('origin')) {
-          console.error('🚨 Origin Issue: Current origin not authorized');
-          console.log('Current origin:', window.location.origin);
-          console.log('Solutions:');
-          console.log('1. Add this origin to Google Cloud Console > Credentials > Authorized JavaScript origins');
-          console.log('2. For localhost: http://localhost:3001');
-        } else if (error.message.includes('idpiframe_initialization_failed')) {
-          console.error('🚨 OAuth Issue: Google OAuth iframe failed to initialize');
-          console.log('Solutions:');
-          console.log('1. Check OAuth consent screen configuration');
-          console.log('2. Verify app is published or you are a test user');
-          console.log('3. Check authorized domains in OAuth consent screen');
-        }
-      }
-      
       throw this.initializationError;
     }
   }
@@ -547,48 +469,6 @@ export class GoogleCalendarIntegration {
   // Get initialization error if any
   getInitializationError(): Error | null {
     return this.initializationError;
-  }
-
-  // Diagnostic method to troubleshoot connection issues
-  async runDiagnostics(): Promise<{
-    environment: 'browser' | 'server';
-    envVars: { apiKey: boolean; clientId: boolean };
-    currentOrigin?: string;
-    gapiLoaded: boolean;
-    apiInitialized: boolean;
-    authAvailable: boolean;
-    userSignedIn: boolean;
-    errors: string[];
-  }> {
-    const diagnostics = {
-      environment: (typeof window === 'undefined') ? 'server' as const : 'browser' as const,
-      envVars: {
-        apiKey: !!process.env.NEXT_PUBLIC_GOOGLE_API_KEY,
-        clientId: !!process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID
-      },
-      currentOrigin: typeof window !== 'undefined' ? window.location.origin : undefined,
-      gapiLoaded: typeof window !== 'undefined' && !!window.gapi,
-      apiInitialized: this.isInitialized,
-      authAvailable: false,
-      userSignedIn: this.isSignedIn,
-      errors: [] as string[]
-    };
-
-    // Check auth availability
-    if (this.gapi) {
-      try {
-        const authInstance = this.gapi.auth2.getAuthInstance();
-        diagnostics.authAvailable = !!authInstance;
-      } catch (error) {
-        diagnostics.errors.push(`Auth instance error: ${error instanceof Error ? error.message : 'Unknown'}`);
-      }
-    }
-
-    if (this.initializationError) {
-      diagnostics.errors.push(`Initialization error: ${this.initializationError.message}`);
-    }
-
-    return diagnostics;
   }
 }
 
