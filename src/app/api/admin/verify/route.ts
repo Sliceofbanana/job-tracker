@@ -2,7 +2,25 @@ import { NextRequest, NextResponse } from 'next/server';
 import { headers } from 'next/headers';
 
 // Server-side admin verification (secure - not exposed to client)
-const ADMIN_EMAILS = process.env.ADMIN_EMAILS?.toLowerCase().split(',').map(email => email.trim()) || [];
+// Try both environment variable formats for compatibility
+const getAdminEmails = (): string[] => {
+  const serverEmails = process.env.ADMIN_EMAILS;
+  const clientEmails = process.env.NEXT_PUBLIC_ADMIN_EMAILS;
+  
+  // Prefer server-side env var, fall back to client-side
+  const emailsString = serverEmails || clientEmails;
+  
+  if (!emailsString) {
+    console.warn('No admin emails configured in environment variables (ADMIN_EMAILS or NEXT_PUBLIC_ADMIN_EMAILS)');
+    return [];
+  }
+  
+  const emails = emailsString.toLowerCase().split(',').map(email => email.trim()).filter(Boolean);
+  console.log('Admin emails loaded:', emails.length, 'emails configured');
+  return emails;
+};
+
+const ADMIN_EMAILS = getAdminEmails();
 
 // Rate limiting for admin verification requests
 const rateLimitMap = new Map<string, { count: number; lastReset: number }>();
@@ -55,9 +73,16 @@ export async function POST(request: NextRequest) {
     const normalizedEmail = email.toLowerCase().trim();
     const isAdmin = ADMIN_EMAILS.includes(normalizedEmail);
 
-    // Log admin verification attempts for security monitoring
+    // Enhanced logging for debugging admin access issues
     if (action === 'verify') {
-      console.log(`Admin verification attempt: ${normalizedEmail} - ${isAdmin ? 'SUCCESS' : 'DENIED'} - IP: ${ip}`);
+      console.log('=== Admin Verification Debug ===');
+      console.log('Email being checked:', normalizedEmail);
+      console.log('Available admin emails:', ADMIN_EMAILS);
+      console.log('Is admin?', isAdmin);
+      console.log('Client IP:', ip);
+      console.log('Environment check - ADMIN_EMAILS exists:', !!process.env.ADMIN_EMAILS);
+      console.log('Environment check - NEXT_PUBLIC_ADMIN_EMAILS exists:', !!process.env.NEXT_PUBLIC_ADMIN_EMAILS);
+      console.log('==============================');
     }
 
     // Return minimal information
