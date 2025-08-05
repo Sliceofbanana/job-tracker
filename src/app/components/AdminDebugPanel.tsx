@@ -10,9 +10,25 @@ import { useAuth } from '../authprovider';
 import { verifyAdminStatus } from '../utils/secureAdmin';
 import { isAdminSync, isAdmin } from '../utils/adminAuth';
 
+interface DebugInfo {
+  userEmail?: string;
+  timestamp?: string;
+  tests?: {
+    syncCheck: boolean;
+    asyncCheck: boolean;
+    serverVerification: boolean;
+  };
+  environment?: {
+    hasPublicAdminEmails: boolean;
+    publicAdminEmails?: string;
+  };
+  error?: string;
+  details?: string;
+}
+
 export default function AdminDebugPanel() {
   const { user } = useAuth();
-  const [debugInfo, setDebugInfo] = useState<any>(null);
+  const [debugInfo, setDebugInfo] = useState<DebugInfo | null>(null);
   const [testing, setTesting] = useState(false);
 
   const runAdminTest = async () => {
