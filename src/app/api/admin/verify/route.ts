@@ -11,12 +11,11 @@ const getAdminEmails = (): string[] => {
   const emailsString = serverEmails || clientEmails;
   
   if (!emailsString) {
-    console.warn('No admin emails configured in environment variables (ADMIN_EMAILS or NEXT_PUBLIC_ADMIN_EMAILS)');
+    console.warn('No admin emails configured in environment variables');
     return [];
   }
   
   const emails = emailsString.toLowerCase().split(',').map(email => email.trim()).filter(Boolean);
-  console.log('Admin emails loaded:', emails.length, 'emails configured');
   return emails;
 };
 
@@ -73,16 +72,9 @@ export async function POST(request: NextRequest) {
     const normalizedEmail = email.toLowerCase().trim();
     const isAdmin = ADMIN_EMAILS.includes(normalizedEmail);
 
-    // Enhanced logging for debugging admin access issues
-    if (action === 'verify') {
-      console.log('=== Admin Verification Debug ===');
-      console.log('Email being checked:', normalizedEmail);
-      console.log('Available admin emails:', ADMIN_EMAILS);
-      console.log('Is admin?', isAdmin);
-      console.log('Client IP:', ip);
-      console.log('Environment check - ADMIN_EMAILS exists:', !!process.env.ADMIN_EMAILS);
-      console.log('Environment check - NEXT_PUBLIC_ADMIN_EMAILS exists:', !!process.env.NEXT_PUBLIC_ADMIN_EMAILS);
-      console.log('==============================');
+    // Basic admin verification logging (only for failed attempts)
+    if (action === 'verify' && !isAdmin) {
+      console.log(`Admin verification denied for: ${normalizedEmail} - IP: ${ip}`);
     }
 
     // Return minimal information

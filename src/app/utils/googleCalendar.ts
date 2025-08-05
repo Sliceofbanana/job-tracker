@@ -21,6 +21,12 @@ export class GoogleCalendarIntegration {
   // Initialize Google API
   private async initializeGapi() {
     try {
+      // Skip initialization if API key or client ID is missing
+      if (!process.env.NEXT_PUBLIC_GOOGLE_API_KEY || !process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
+        console.warn('Google Calendar API configuration missing - skipping initialization');
+        return;
+      }
+
       // Load Google API script
       if (!window.gapi) {
         await this.loadGapiScript();
@@ -43,7 +49,8 @@ export class GoogleCalendarIntegration {
       
       console.log('Google Calendar API initialized successfully');
     } catch (error) {
-      console.error('Error initializing Google Calendar API:', error);
+      console.warn('Google Calendar API initialization failed (this is optional):', error);
+      // Don't throw - Google Calendar is optional functionality
     }
   }
 

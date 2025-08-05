@@ -1,5 +1,12 @@
 /**
- * Secure Admin Utilities - Server-side admin verification
+ * Secure Admin Utilities - Server-side     const data: AdminVerificationResponse | AdminAPIError = await response.json();
+    
+    if ('error' in data) {
+      console.error('❌ Admin verification error:', data.error);
+      return false;
+    }
+
+    return data.isAdmin || false;fication
  * Replaces client-side NEXT_PUBLIC_ADMIN_EMAILS with secure server-side verification
  */
 
