@@ -183,19 +183,6 @@ export default function GoogleCalendarSettings({ className = "", onConnectionCha
           </div>
         )}
       </div>
-
-      {/* Setup Instructions */}
-      <div className="mt-6 p-4 rounded-lg bg-yellow-500/10 border border-yellow-400/30">
-        <h4 className="font-semibold text-yellow-300 mb-2">Setup Requirements:</h4>
-        <div className="text-sm text-white/70 space-y-1">
-          <p>1. Google API Key and Client ID must be configured</p>
-          <p>2. Google Calendar API must be enabled</p>
-          <p>3. OAuth consent screen must be configured</p>
-          <p className="text-xs text-white/50 mt-2">
-            Contact your administrator if you encounter permission issues.
-          </p>
-        </div>
-      </div>
     </div>
   );
 }

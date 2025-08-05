@@ -6,7 +6,8 @@ import { db } from '../firebase';
 import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { deleteUser } from 'firebase/auth';
 import AnalyticsDashboard from './AnalyticsDashboard';
-import GoogleCalendarSettings from './GoogleCalendarSettings';
+import FeedbackSection from './FeedbackSection';
+import CurrencySettings, { useCurrencySettings } from './CurrencySettings';
 import { JobEntry } from '../types';
 import { calculateStats } from '../utils';
 
@@ -18,6 +19,7 @@ interface ProfileSettingsProps {
 
 export default function ProfileSettings({ className = "", onClose, jobs = [] }: ProfileSettingsProps) {
   const { user } = useAuth();
+  const { country, updateCountry } = useCurrencySettings();
   const [isDeleting, setIsDeleting] = useState(false);
   const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [deleteConfirmText, setDeleteConfirmText] = useState('');
@@ -153,9 +155,34 @@ export default function ProfileSettings({ className = "", onClose, jobs = [] }: 
             <AnalyticsDashboard stats={stats} className="" />
           </div>
 
-          {/* Google Calendar Integration */}
-          <div className="mb-4 sm:mb-6">
-            <GoogleCalendarSettings />
+          {/* Currency Settings */}
+          <div className="mb-4 sm:mb-6 p-4 sm:p-6 rounded-xl bg-gradient-to-br from-green-800/30 to-emerald-800/30 backdrop-blur-md border border-green-400/30">
+            <div className="mb-4">
+              <h3 className="text-lg sm:text-xl font-bold text-green-300 mb-2 flex items-center gap-2">
+                💰 Currency & Region Settings
+              </h3>
+              <p className="text-sm text-white/70 mb-4">
+                Set your preferred currency and region for salary displays in your job applications.
+              </p>
+            </div>
+            <CurrencySettings 
+              currentCountry={country}
+              onCountryChange={updateCountry}
+              className="w-full"
+            />
+          </div>
+
+          {/* Feedback Section */}
+          <div className="mb-4 sm:mb-6 p-4 sm:p-6 rounded-xl bg-gradient-to-br from-blue-800/30 to-purple-800/30 backdrop-blur-md border border-blue-400/30">
+            <div className="mb-4">
+              <h3 className="text-lg sm:text-xl font-bold text-blue-300 mb-2 flex items-center gap-2">
+                💬 Help Us Improve
+              </h3>
+              <p className="text-sm text-white/70">
+                Found a bug or have a feature idea? Your feedback helps us make the job tracker better for everyone.
+              </p>
+            </div>
+            <FeedbackSection />
           </div>
 
           {/* Profile Actions */}

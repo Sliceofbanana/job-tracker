@@ -144,37 +144,6 @@ export default function AboutPage({ className = "" }: AboutPageProps) {
           </div>
         </div>
       </div>
-
-      {/* Note about feedback location */}
-      <div className="p-6 rounded-xl bg-gradient-to-br from-orange-800/30 to-yellow-800/30 backdrop-blur-md border border-orange-400/30">
-        <h2 className="text-2xl font-bold text-orange-300 mb-4 flex items-center gap-3">
-          🐛 Want to Report Bugs or Suggest Features?
-        </h2>
-        <p className="text-white/80 mb-4">
-          We&apos;ve made it easier to share your feedback! You can now find the bug report and feature request form 
-          prominently displayed at the top of the main page - no need to scroll down here anymore.
-        </p>
-        <div className="flex items-center gap-2 text-cyan-300">
-          <span className="text-xl">👆</span>
-          <span className="font-semibold">Look for the &ldquo;Report Bugs & Suggest Features&rdquo; section above</span>
-        </div>
-      </div>
-
-      {/* Contact & Social */}
-      <div className="p-6 rounded-xl bg-gradient-to-br from-gray-800/50 to-gray-900/50 backdrop-blur-md border border-white/20 text-center">
-        <h2 className="text-xl font-bold text-white mb-4">Stay Connected</h2>
-        <p className="text-white/60 mb-4">
-          Follow our journey and get updates on new features and improvements.
-        </p>
-        <div className="flex justify-center gap-4">
-          <div className="px-4 py-2 rounded-lg bg-white/10 text-white/70">
-            💼 Built with ❤️ for job seekers
-          </div>
-          <div className="px-4 py-2 rounded-lg bg-white/10 text-white/70">
-            🚀 Always improving
-          </div>
-        </div>
-      </div>
     </div>
   );
 }

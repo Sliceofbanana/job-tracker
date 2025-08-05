@@ -182,37 +182,6 @@ export default function AdvancedFilters({ jobs, onFiltersChange, className = "" 
             </div>
           )}
 
-          {/* Salary Range */}
-          <div>
-            <label className="block text-sm font-medium text-white/80 mb-2">
-              Salary Range: ${filters.salaryRange[0].toLocaleString()} - ${filters.salaryRange[1].toLocaleString()}
-            </label>
-            <div className="flex gap-4">
-              <input
-                type="range"
-                min="0"
-                max="300000"
-                step="5000"
-                value={filters.salaryRange[0]}
-                onChange={(e) => updateFilters({ 
-                  salaryRange: [Number(e.target.value), filters.salaryRange[1]] 
-                })}
-                className="flex-1"
-              />
-              <input
-                type="range"
-                min="0"
-                max="300000"
-                step="5000"
-                value={filters.salaryRange[1]}
-                onChange={(e) => updateFilters({ 
-                  salaryRange: [filters.salaryRange[0], Number(e.target.value)] 
-                })}
-                className="flex-1"
-              />
-            </div>
-          </div>
-
           {/* Quick Filter Buttons */}
           <div className="flex flex-wrap gap-2">
             <button

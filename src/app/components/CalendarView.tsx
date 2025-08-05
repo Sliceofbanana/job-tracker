@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { JobEntry, CalendarEvent } from '../types';
 import { getGoogleCalendar } from '../utils/googleCalendar';
+import GoogleCalendarSettings from './GoogleCalendarSettings';
 
 interface CalendarViewProps {
   jobs: JobEntry[];
@@ -114,18 +115,26 @@ export default function CalendarView({ jobs, onDateClick, className = "" }: Cale
   const isSelected = (date: Date) => selectedDate?.toDateString() === date.toDateString();
 
   return (
-    <div className={`p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/20 ${className}`}>
-      {/* Google Calendar Sync Status */}
-      {isGoogleCalendarConnected && (
-        <div className="mb-4 p-3 rounded-lg bg-green-500/20 border border-green-400/30 flex items-center gap-2">
-          <span className="text-green-400">📅</span>
-          <div className="flex-1">
-            <span className="text-green-300 font-medium">Google Calendar Sync Active</span>
-            <p className="text-xs text-white/70">Events are automatically synced with your Google Calendar</p>
+    <div className={`space-y-6 ${className}`}>
+      {/* Google Calendar Integration */}
+      <GoogleCalendarSettings 
+        onConnectionChange={setIsGoogleCalendarConnected}
+        className="mb-6"
+      />
+
+      {/* Calendar Component */}
+      <div className="p-4 rounded-xl bg-white/5 backdrop-blur-sm border border-white/20">
+        {/* Google Calendar Sync Status */}
+        {isGoogleCalendarConnected && (
+          <div className="mb-4 p-3 rounded-lg bg-green-500/20 border border-green-400/30 flex items-center gap-2">
+            <span className="text-green-400">📅</span>
+            <div className="flex-1">
+              <span className="text-green-300 font-medium">Google Calendar Sync Active</span>
+              <p className="text-xs text-white/70">Events are automatically synced with your Google Calendar</p>
+            </div>
+            <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
           </div>
-          <div className="w-2 h-2 rounded-full bg-green-400 animate-pulse"></div>
-        </div>
-      )}
+        )}
 
       {/* Calendar Header */}
       <div className="flex items-center justify-between mb-6">
@@ -277,6 +286,7 @@ export default function CalendarView({ jobs, onDateClick, className = "" }: Cale
             </div>
           )}
         </div>
+      </div>
       </div>
     </div>
   );

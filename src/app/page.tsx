@@ -28,7 +28,6 @@ import NotificationsPanel from './components/NotificationsPanel';
 import EnhancedJobModal from './components/EnhancedJobModal';
 import AboutPage from './components/AboutPage';
 import FeedbackAdmin from './components/FeedbackAdmin';
-import FeedbackSection from './components/FeedbackSection';
 import ProfileSettings from './components/ProfileSettings';
 import NotificationBubbles, { useNotifications } from './components/NotificationBubbles';
 import { useCurrencySettings } from './components/CurrencySettings';
@@ -531,11 +530,6 @@ export default function Home() {
         <div className="absolute bottom-0 left-0 w-16 h-16 sm:w-24 sm:h-24 md:w-36 md:h-36 bg-fuchsia-500/30 rounded-full blur-[40px] sm:blur-[60px] md:blur-[80px] border-b border-l border-fuchsia-400/40 pointer-events-none" style={{ transform: 'translate(-50%, 50%)' }} />
 
         <h1 className="text-lg sm:text-2xl md:text-3xl lg:text-4xl font-extrabold text-white mb-3 sm:mb-4 md:mb-6 lg:mb-8 text-center px-1 sm:px-2">🎯 Job Application Tracker</h1>
-
-        {/* Feedback Section - Prominent placement for better visibility */}
-        <div className="mb-4 sm:mb-6 max-w-5xl mx-auto px-2 sm:px-4">
-          <FeedbackSection />
-        </div>
 
         {/* Error and Loading Feedback */}
         {error && !loading && <div className="mb-3 sm:mb-4 text-center text-red-400 font-semibold animate-pulse text-sm sm:text-base">{error}</div>}

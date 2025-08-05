@@ -25,6 +25,9 @@ export default function CurrencySettings({ currentCountry, onCountryChange, clas
     onCountryChange(country.code);
     setIsOpen(false);
     setSearchTerm('');
+    
+    // Optional: You can add a success message here if needed
+    // alert(`Currency updated to ${country.currency} (${country.name})`);
   };
 
   // Close dropdown when clicking outside
@@ -45,6 +48,7 @@ export default function CurrencySettings({ currentCountry, onCountryChange, clas
   return (
     <div className={`relative currency-dropdown ${className}`}>
       <button
+        type="button"
         onClick={() => setIsOpen(!isOpen)}
         className="flex items-center gap-2 px-4 py-2 bg-white/10 backdrop-blur-md border border-white/20 rounded-lg text-white hover:bg-white/20 transition-all duration-200 min-w-[200px]"
         aria-label="Select currency and country"
