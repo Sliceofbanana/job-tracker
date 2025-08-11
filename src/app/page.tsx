@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useAuth } from "./authprovider";
 import Login from "./login";
 import { Analytics } from "@vercel/analytics/next"
@@ -53,57 +53,8 @@ const congratulationQuotes = [
   "⭐ Superstar! Your talent has been recognized with this well-deserved offer!"
 ];
 
-// Application templates with guidance
-const applicationTemplates = {
-  "software-engineer": {
-    name: "Software Engineer",
-    tips: "Focus on: Technical skills, coding projects, problem-solving abilities, and system design experience.",
-    keySkills: ["Programming Languages", "Data Structures", "System Design", "Version Control", "Testing"],
-    coverLetterHint: "Highlight your technical projects, coding experience, and ability to solve complex problems."
-  },
-  "product-manager": {
-    name: "Product Manager",
-    tips: "Focus on: Strategic thinking, user research, cross-functional collaboration, and data-driven decisions.",
-    keySkills: ["Product Strategy", "User Research", "Data Analysis", "Cross-functional Leadership", "Roadmap Planning"],
-    coverLetterHint: "Emphasize your ability to bridge technical and business teams, and your experience with product lifecycle."
-  },
-  "data-scientist": {
-    name: "Data Scientist",
-    tips: "Focus on: Statistical analysis, machine learning, data visualization, and business impact of insights.",
-    keySkills: ["Machine Learning", "Statistical Analysis", "Python/R", "Data Visualization", "Business Intelligence"],
-    coverLetterHint: "Showcase your analytical projects, ability to derive insights from data, and business impact."
-  },
-  "designer": {
-    name: "Designer",
-    tips: "Focus on: Portfolio quality, user experience principles, design thinking, and collaboration with developers.",
-    keySkills: ["UI/UX Design", "Design Systems", "Prototyping", "User Research", "Visual Design"],
-    coverLetterHint: "Let your portfolio speak first, then emphasize your design process and user-centered approach."
-  },
-  "marketing": {
-    name: "Marketing",
-    tips: "Focus on: Campaign results, audience targeting, brand development, and ROI metrics.",
-    keySkills: ["Digital Marketing", "Content Strategy", "Analytics", "Brand Management", "Campaign Optimization"],
-    coverLetterHint: "Quantify your marketing successes, show understanding of target audiences and growth metrics."
-  },
-  "sales": {
-    name: "Sales",
-    tips: "Focus on: Sales numbers, relationship building, closing techniques, and customer retention.",
-    keySkills: ["Relationship Building", "Negotiation", "Pipeline Management", "Customer Retention", "Sales Strategy"],
-    coverLetterHint: "Lead with your sales achievements, quota performance, and relationship-building abilities."
-  },
-  "custom": {
-    name: "Custom",
-    tips: "Tailor your approach: Research the specific role requirements and company culture thoroughly.",
-    keySkills: ["Adaptability", "Research Skills", "Communication", "Problem Solving", "Industry Knowledge"],
-    coverLetterHint: "Customize everything based on the job description and company values."
-  },
-  "internship": {
-    name: "Internship",
-    tips: "Focus on: Learning enthusiasm, relevant coursework, projects, willingness to contribute, and growth mindset.",
-    keySkills: ["Academic Projects", "Relevant Coursework", "Communication", "Teamwork", "Eagerness to Learn"],
-    coverLetterHint: "Emphasize your passion for learning, relevant academic work, and how this internship aligns with your career goals."
-  }
-};
+// Define the view type
+type ViewType = 'kanban' | 'calendar' | 'notifications' | 'about' | 'admin' | 'profile';
 
 export default function Home() {
   const { user, login, logout } = useAuth();
@@ -121,7 +72,7 @@ export default function Home() {
   const [congratulationMessage, setCongratulationMessage] = useState("");
 
   // New enhanced features state
-  const [currentView, setCurrentView] = useState<'kanban' | 'calendar' | 'notifications' | 'about' | 'admin' | 'profile'>('kanban');
+  const [currentView, setCurrentView] = useState<ViewType>('kanban');
   const [showEnhancedModal, setShowEnhancedModal] = useState(false);
   const [editingJob, setEditingJob] = useState<JobEntry | null>(null);
   const [selectedJobs, setSelectedJobs] = useState<string[]>([]);
@@ -132,6 +83,11 @@ export default function Home() {
     salaryRange: [0, 300000],
     dateRange: 'all'
   });
+
+  // Handle view changes with proper typing
+  const handleViewChange = useCallback((view: ViewType) => {
+    setCurrentView(view);
+  }, []);
 
   // Rate limiting helper
   const isRateLimited = (): boolean => {
@@ -486,16 +442,16 @@ export default function Home() {
           {/* Desktop Sidebar */}
           <div className="hidden lg:flex flex-col gap-3 pt-8 sticky top-4">
             {[
-              { key: 'kanban', label: '📋 Kanban', icon: '📋' },
-              { key: 'calendar', label: '📅 Calendar', icon: '📅' },
-              { key: 'notifications', label: '🔔 Notifications', icon: '🔔' },
-              { key: 'profile', label: '👤 Profile', icon: '👤' },
-              { key: 'about', label: '📖 About', icon: '📖' },
-              ...(isUserAdmin ? [{ key: 'admin', label: '⚙️ Admin', icon: '⚙️' }] : [])
+              { key: 'kanban' as const, label: '📋 Kanban', icon: '📋' },
+              { key: 'calendar' as const, label: '📅 Calendar', icon: '📅' },
+              { key: 'notifications' as const, label: '🔔 Notifications', icon: '🔔' },
+              { key: 'profile' as const, label: '👤 Profile', icon: '👤' },
+              { key: 'about' as const, label: '📖 About', icon: '📖' },
+              ...(isUserAdmin ? [{ key: 'admin' as const, label: '⚙️ Admin', icon: '⚙️' }] : [])
             ].map(view => (
               <button
                 key={view.key}
-                onClick={() => setCurrentView(view.key as any)}
+                onClick={() => handleViewChange(view.key)}
                 className={`px-4 py-3 font-bold text-sm transition-all duration-300 min-w-[140px] text-left border rounded-l-2xl border-r-0 ${
                   currentView === view.key
                     ? 'bg-purple-600 text-white transform scale-105 border-white/20 backdrop-blur-md shadow-lg'
@@ -511,16 +467,16 @@ export default function Home() {
           <div className="lg:hidden w-full mb-4 overflow-x-auto">
             <div className="flex gap-2 px-2 pb-2 min-w-max">
               {[
-                { key: 'kanban', label: '📋 Kanban', short: '📋' },
-                { key: 'calendar', label: '📅 Calendar', short: '📅' },
-                { key: 'notifications', label: '🔔 Notifications', short: '🔔' },
-                { key: 'profile', label: '👤 Profile', short: '👤' },
-                { key: 'about', label: '📖 About', short: '📖' },
-                ...(isUserAdmin ? [{ key: 'admin', label: '⚙️ Admin', short: '⚙️' }] : [])
+                { key: 'kanban' as const, label: '📋 Kanban', short: '📋' },
+                { key: 'calendar' as const, label: '📅 Calendar', short: '📅' },
+                { key: 'notifications' as const, label: '🔔 Notifications', short: '🔔' },
+                { key: 'profile' as const, label: '👤 Profile', short: '👤' },
+                { key: 'about' as const, label: '📖 About', short: '📖' },
+                ...(isUserAdmin ? [{ key: 'admin' as const, label: '⚙️ Admin', short: '⚙️' }] : [])
               ].map(view => (
                 <button
                   key={view.key}
-                  onClick={() => setCurrentView(view.key as any)}
+                  onClick={() => handleViewChange(view.key)}
                   className={`px-3 py-2 rounded-lg font-bold text-sm transition-all duration-200 whitespace-nowrap ${
                     currentView === view.key
                       ? 'bg-gradient-to-r from-cyan-500 to-cyan-600 text-white shadow-lg'

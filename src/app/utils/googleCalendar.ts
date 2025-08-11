@@ -93,6 +93,7 @@ export class GoogleCalendarIntegration {
       const script = document.createElement('script');
       script.src = 'https://apis.google.com/js/api.js';
       script.onload = () => resolve();
+      // This error occurs when CSP blocks Google domains
       script.onerror = () => reject(new Error('Failed to load Google API script'));
       document.head.appendChild(script);
     });
