@@ -40,18 +40,18 @@ const nextConfig: NextConfig = {
             value: 'strict-origin-when-cross-origin',
           },
           {
-            key: 'Content-Security-Policy',
-            value: [
-              "default-src 'self'",
-              "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://www.gstatic.com",
-              "style-src 'self' 'unsafe-inline' https://accounts.google.com https://www.gstatic.com",
-              "img-src 'self' data: https: blob:",
-              "connect-src 'self' https://*.googleapis.com https://*.firebaseapp.com https://identitytoolkit.googleapis.com wss://*.firebaseapp.com https://accounts.google.com https://www.googleapis.com https://oauth2.googleapis.com https://apis.google.com https://content.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net",
-              "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com https://content.googleapis.com https://apis.google.com",
-              "object-src 'none'",
-              "base-uri 'self'",
-              "form-action 'self'"
-            ].join('; ')
+          key: 'Content-Security-Policy',
+          value: [
+            "default-src 'self'",
+            "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://apis.google.com https://accounts.google.com https://www.gstatic.com https://ssl.gstatic.com https://content.googleapis.com",
+            "style-src 'self' 'unsafe-inline' https://accounts.google.com https://www.gstatic.com",
+            "img-src 'self' data: https: blob:",
+            "connect-src 'self' https://*.googleapis.com https://*.firebaseapp.com https://identitytoolkit.googleapis.com wss://*.firebaseapp.com https://accounts.google.com https://www.googleapis.com https://oauth2.googleapis.com https://apis.google.com https://content.googleapis.com https://*.firebaseio.com https://*.cloudfunctions.net",
+            "frame-src 'self' https://accounts.google.com https://*.firebaseapp.com https://content.googleapis.com https://apis.google.com https://*.gstatic.com https://accounts.youtube.com",
+            "object-src 'none'",
+            "base-uri 'self'",
+            "form-action 'self'"
+          ].join('; ')
           },
         ],
       },
