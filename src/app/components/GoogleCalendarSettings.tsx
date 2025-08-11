@@ -9,11 +9,14 @@ interface GoogleCalendarSettingsProps {
 }
 
 interface CalendarEvent {
+  id: string;
   summary: string;
-  start?: {
-    dateTime?: string;
-    date?: string;
-  };
+  description?: string;
+}
+
+interface ErrorWithCode {
+  error?: string;
+  message?: string;
 }
 
 export default function GoogleCalendarSettings({ className = "", onConnectionChange }: GoogleCalendarSettingsProps) {
@@ -26,10 +29,12 @@ export default function GoogleCalendarSettings({ className = "", onConnectionCha
 
   const loadUpcomingEvents = useCallback(async () => {
     try {
-      const events = await calendar.getUpcomingEvents(10);
+      const events = await calendar.getJobTrackerEvents();
       setUpcomingEvents(events);
     } catch (err) {
       console.error('Error loading events:', err);
+      // Don't show error to user for this, just log it
+      setUpcomingEvents([]);
     }
   }, [calendar]);
 
@@ -63,7 +68,7 @@ export default function GoogleCalendarSettings({ className = "", onConnectionCha
     } catch (err: unknown) {
       console.error('Calendar connection error:', err);
       
-      const error = err as { error?: string; message?: string };
+      const error = err as ErrorWithCode;
       let errorMessage = 'Error connecting to Google Calendar.';
       
       if (error.message) {
@@ -167,16 +172,11 @@ export default function GoogleCalendarSettings({ className = "", onConnectionCha
                 <h4 className="font-semibold text-white mb-3">Recent Job-Related Events:</h4>
                 <div className="space-y-2 max-h-32 overflow-y-auto">
                   {upcomingEvents.slice(0, 5).map((event, index) => (
-                    <div key={index} className="text-sm text-white/70 flex justify-between">
-                      <span className="truncate flex-1">{event.summary}</span>
-                      <span className="text-xs text-white/50 ml-2">
-                        {event.start?.dateTime 
-                          ? new Date(event.start.dateTime).toLocaleDateString()
-                          : event.start?.date 
-                            ? new Date(event.start.date).toLocaleDateString()
-                            : 'No date'
-                        }
-                      </span>
+                    <div key={index} className="text-sm text-white/70">
+                      <span className="truncate">{event.summary}</span>
+                      {event.description && (
+                        <p className="text-xs text-white/50 mt-1 truncate">{event.description}</p>
+                      )}
                     </div>
                   ))}
                 </div>

@@ -2,133 +2,268 @@
 
 import { JobEntry } from '../types';
 
-// Google Calendar API configuration
-const DISCOVERY_DOCS = ["https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest"];
-const SCOPES = 'https://www.googleapis.com/auth/calendar';
+// Google API type definitions
+interface GoogleAuth {
+  isSignedIn: {
+    get(): boolean;
+  };
+  currentUser: {
+    get(): GoogleUser;
+  };
+  signIn(options?: { prompt?: string; ux_mode?: string }): Promise<GoogleUser>;
+  signOut(): Promise<void>;
+}
 
-// Google Calendar integration class
+interface GoogleUser {
+  isSignedIn(): boolean;
+  getAuthResponse(): {
+    access_token: string;
+    expires_in: number;
+  };
+}
+
+interface GoogleApiClient {
+  init(config: {
+    apiKey: string;
+    clientId: string;
+    discoveryDocs: string[];
+    scope: string;
+  }): Promise<void>;
+  calendar: {
+    events: {
+      list(params: {
+        calendarId: string;
+        timeMin?: string;
+        timeMax?: string;
+        showDeleted?: boolean;
+        singleEvents?: boolean;
+        maxResults?: number;
+        orderBy?: string;
+        q?: string;
+      }): Promise<{ result: { items?: GoogleCalendarEvent[] } }>;
+      insert(params: {
+        calendarId: string;
+        resource: CalendarEvent;
+      }): Promise<{ result: { id?: string; htmlLink?: string } }>;
+      update(params: {
+        calendarId: string;
+        eventId: string;
+        resource: CalendarEvent;
+      }): Promise<void>;
+      delete(params: {
+        calendarId: string;
+        eventId: string;
+      }): Promise<void>;
+    };
+  };
+}
+
+interface GoogleCalendarEvent {
+  id?: string;
+  summary?: string;
+  description?: string;
+  start?: {
+    dateTime?: string;
+    date?: string;
+  };
+  htmlLink?: string;
+}
+
+// Google API client interface
+interface GapiClient {
+  load: (apis: string, callback: () => void) => void;
+  client: GoogleApiClient;
+  auth2: {
+    getAuthInstance(): GoogleAuth;
+  };
+}
+
+// Calendar event interface - Fixed to match Google Calendar API
+interface CalendarEvent {
+  summary: string;
+  description: string;
+  start: {
+    dateTime: string;
+    timeZone: string;
+  };
+  end: {
+    dateTime: string;
+    timeZone: string;
+  };
+  reminders: {
+    useDefault: boolean;
+    overrides: Array<{
+      method: string;
+      minutes: number;
+    }>;
+  };
+}
+
+// Google Calendar Integration Class
 export class GoogleCalendarIntegration {
-  private gapi: typeof window.gapi | null = null;
+  private readonly clientId = '371415396058-m01mutscge7tgu9jot50cidm4qij40oe.apps.googleusercontent.com';
+  private readonly apiKey = 'AIzaSyC7rrJKo4bTayTgCGLsL_gOyZaZCnqL89c';
+  private readonly scope = 'https://www.googleapis.com/auth/calendar';
+  private readonly discoveryDocs = ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'];
+  
+  private gapi: GapiClient | null = null;
   private isInitialized = false;
-  private isSignedIn = false;
+  private isInitializing = false;
   private initializationPromise: Promise<void> | null = null;
   private initializationError: Error | null = null;
+  private accessToken: string | null = null;
 
   constructor() {
-    // Don't initialize in constructor - do it lazily when needed
+    // Initialize when instantiated
+    this.initialize();
   }
 
-  // Ensure Google API is initialized before any operation
-  private async ensureInitialized(): Promise<void> {
-    if (this.isInitialized && this.gapi) {
+  // Initialize Google API - Now uses popup instead of iframe
+  private async initialize(): Promise<void> {
+    if (this.isInitialized || this.isInitializing) {
+      if (this.initializationPromise) {
+        return this.initializationPromise;
+      }
       return;
+    }
+
+    this.isInitializing = true;
+    this.initializationError = null;
+
+    this.initializationPromise = new Promise(async (resolve, reject) => {
+      try {
+        // Check if we're in a browser environment
+        if (typeof window === 'undefined') {
+          throw new Error('Google Calendar integration requires browser environment');
+        }
+
+        // Load Google API script if not already loaded
+        if (!(window as typeof window & { gapi?: GapiClient }).gapi) {
+          await this.loadGoogleApiScript();
+        }
+
+        // Wait for gapi to be ready
+        await new Promise<void>((gapiResolve) => {
+          (window as typeof window & { gapi: GapiClient }).gapi.load('client:auth2', gapiResolve);
+        });
+
+        // Initialize the client
+        await (window as typeof window & { gapi: GapiClient }).gapi.client.init({
+          apiKey: this.apiKey,
+          clientId: this.clientId,
+          discoveryDocs: this.discoveryDocs,
+          scope: this.scope
+        });
+
+        this.gapi = (window as typeof window & { gapi: GapiClient }).gapi;
+        this.isInitialized = true;
+        this.isInitializing = false;
+
+        // Check if user is already signed in
+        if (this.gapi) {
+          const authInstance = this.gapi.auth2.getAuthInstance();
+          if (authInstance && authInstance.isSignedIn && authInstance.isSignedIn.get()) {
+            this.updateAccessToken();
+          }
+        }
+
+        console.log('Google Calendar API initialized successfully');
+        resolve();
+      } catch (error) {
+        this.isInitializing = false;
+        this.initializationError = error instanceof Error ? error : new Error('Unknown initialization error');
+        console.error('Failed to initialize Google Calendar API:', error);
+        reject(this.initializationError);
+      }
+    });
+
+    return this.initializationPromise;
+  }
+
+  // Load Google API script dynamically
+  private loadGoogleApiScript(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if ((window as typeof window & { gapi?: GapiClient }).gapi) {
+        resolve();
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://apis.google.com/js/api.js';
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('Failed to load Google API script'));
+      document.head.appendChild(script);
+    });
+  }
+
+  // Ensure initialization is complete before proceeding
+  private async ensureInitialized(): Promise<void> {
+    if (!this.isInitialized) {
+      if (this.initializationPromise) {
+        await this.initializationPromise;
+      } else {
+        await this.initialize();
+      }
     }
 
     if (this.initializationError) {
       throw this.initializationError;
     }
 
-    if (!this.initializationPromise) {
-      this.initializationPromise = this.initializeGapi();
-    }
-
-    await this.initializationPromise;
-  }
-
-  // Initialize Google API
-  private async initializeGapi(): Promise<void> {
-    try {
-      if (typeof window === 'undefined') {
-        throw new Error('Google Calendar API can only be used in browser environment');
-      }
-
-      if (!process.env.NEXT_PUBLIC_GOOGLE_API_KEY || !process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID) {
-        throw new Error('Google Calendar API configuration missing. Please check your environment variables.');
-      }
-
-      if (!window.gapi) {
-        await this.loadGapiScript();
-      }
-
-      await new Promise<void>((resolve, reject) => {
-        let attempts = 0;
-        const maxAttempts = 20;
-        
-        const checkGapi = (): void => {
-          attempts++;
-          if (window.gapi && window.gapi.load) {
-            window.gapi.load('client:auth2', () => resolve());
-          } else if (attempts < maxAttempts) {
-            setTimeout(checkGapi, 300);
-          } else {
-            reject(new Error('Google API not available. Check your internet connection and Content Security Policy.'));
-          }
-        };
-        
-        checkGapi();
-      });
-
-      await window.gapi.client.init({
-        apiKey: process.env.NEXT_PUBLIC_GOOGLE_API_KEY,
-        clientId: process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID,
-        discoveryDocs: DISCOVERY_DOCS,
-        scope: SCOPES
-      });
-
-      this.gapi = window.gapi;
-      this.isInitialized = true;
-      
-      const authInstance = this.gapi.auth2.getAuthInstance();
-      this.isSignedIn = authInstance ? authInstance.isSignedIn.get() : false;
-      
-    } catch (error) {
-      this.initializationError = error instanceof Error ? error : new Error('Unknown initialization error');
-      throw this.initializationError;
+    if (!this.gapi) {
+      throw new Error('Google API not available');
     }
   }
 
-  // Load Google API script dynamically
-  private loadGapiScript(): Promise<void> {
-    return new Promise((resolve, reject) => {
-      const script = document.createElement('script');
-      script.src = 'https://apis.google.com/js/api.js';
-      script.onload = () => resolve();
-      // This error occurs when CSP blocks Google domains
-      script.onerror = () => reject(new Error('Failed to load Google API script'));
-      document.head.appendChild(script);
-    });
+  // Update access token from current auth state
+  private updateAccessToken(): void {
+    if (!this.gapi) return;
+
+    const authInstance = this.gapi.auth2.getAuthInstance();
+    if (authInstance && authInstance.isSignedIn && authInstance.isSignedIn.get()) {
+      const currentUser = authInstance.currentUser.get();
+      const authResponse = currentUser.getAuthResponse();
+      this.accessToken = authResponse.access_token;
+    } else {
+      this.accessToken = null;
+    }
   }
 
-  // Sign in to Google Calendar
+  // Sign in user with popup (no iframe)
   async signIn(): Promise<boolean> {
     try {
-      // Ensure API is initialized before attempting sign in
       await this.ensureInitialized();
       
       if (!this.gapi) {
-        throw new Error('Google API not available after initialization');
+        throw new Error('Google API not initialized');
       }
 
       const authInstance = this.gapi.auth2.getAuthInstance();
       if (!authInstance) {
-        throw new Error('Google Auth instance not available');
+        throw new Error('Auth instance not available');
       }
 
-      await authInstance.signIn();
-      this.isSignedIn = true;
-      return true;
-    } catch (error) {
-      console.error('Error signing in to Google Calendar:', error);
-      
-      // Re-throw with more specific error for UI
-      if (error instanceof Error) {
-        throw new Error(`Google Calendar sign-in failed: ${error.message}`);
+      // Check if already signed in
+      if (authInstance.isSignedIn.get()) {
+        this.updateAccessToken();
+        return true;
       }
-      throw new Error('Google Calendar sign-in failed with unknown error');
+
+      // Sign in with popup (explicitly avoid iframe)
+      await authInstance.signIn({
+        prompt: 'select_account',
+        ux_mode: 'popup' // Force popup mode
+      });
+
+      this.updateAccessToken();
+      return this.isUserSignedIn();
+    } catch (error) {
+      console.error('Sign-in failed:', error);
+      return false;
     }
   }
 
-  // Sign out from Google Calendar
+  // Sign out user
   async signOut(): Promise<void> {
     try {
       await this.ensureInitialized();
@@ -136,21 +271,25 @@ export class GoogleCalendarIntegration {
       if (!this.gapi) return;
 
       const authInstance = this.gapi.auth2.getAuthInstance();
-      if (authInstance) {
+      if (authInstance && authInstance.isSignedIn.get()) {
         await authInstance.signOut();
-        this.isSignedIn = false;
       }
+      
+      this.accessToken = null;
     } catch (error) {
-      console.error('Error signing out from Google Calendar:', error);
+      console.error('Sign-out failed:', error);
     }
   }
 
   // Check if user is signed in
   isUserSignedIn(): boolean {
-    return this.isSignedIn && this.isInitialized && this.gapi !== null;
+    if (!this.gapi) return false;
+
+    const authInstance = this.gapi.auth2.getAuthInstance();
+    return authInstance && authInstance.isSignedIn ? authInstance.isSignedIn.get() : false;
   }
 
-  // Create calendar event for job application
+  // Create calendar event for job
   async createJobEvent(job: JobEntry, eventType: 'application' | 'interview' | 'followup'): Promise<string | null> {
     try {
       await this.ensureInitialized();
@@ -159,18 +298,30 @@ export class GoogleCalendarIntegration {
         throw new Error('User not signed in to Google Calendar');
       }
 
+      // Ensure we have a fresh access token
+      this.updateAccessToken();
+      if (!this.accessToken) {
+        throw new Error('No valid access token available');
+      }
+
       const event = this.buildCalendarEvent(job, eventType);
-      if (!event) return null;
+      if (!event) {
+        return null;
+      }
 
       const response = await this.gapi.client.calendar.events.insert({
         calendarId: 'primary',
         resource: event
       });
 
-      console.log('Calendar event created:', response.result.htmlLink);
-      return response.result.id || null;
+      const eventId = response.result.id;
+      if (eventId) {
+        console.log(`Created ${eventType} event for ${job.role} at ${job.company}: ${response.result.htmlLink}`);
+      }
+
+      return eventId || null;
     } catch (error) {
-      console.error('Error creating calendar event:', error);
+      console.error(`Error creating ${eventType} event:`, error);
       return null;
     }
   }
@@ -180,10 +331,20 @@ export class GoogleCalendarIntegration {
     try {
       await this.ensureInitialized();
       
-      if (!this.isUserSignedIn() || !this.gapi) return false;
+      if (!this.isUserSignedIn() || !this.gapi) {
+        throw new Error('User not signed in to Google Calendar');
+      }
+
+      // Ensure we have a fresh access token
+      this.updateAccessToken();
+      if (!this.accessToken) {
+        throw new Error('No valid access token available');
+      }
 
       const event = this.buildCalendarEvent(job, eventType);
-      if (!event) return false;
+      if (!event) {
+        return false;
+      }
 
       await this.gapi.client.calendar.events.update({
         calendarId: 'primary',
@@ -191,10 +352,10 @@ export class GoogleCalendarIntegration {
         resource: event
       });
 
-      console.log('Calendar event updated');
+      console.log(`Updated ${eventType} event for ${job.role} at ${job.company}`);
       return true;
     } catch (error) {
-      console.error('Error updating calendar event:', error);
+      console.error(`Error updating ${eventType} event:`, error);
       return false;
     }
   }
@@ -204,14 +365,22 @@ export class GoogleCalendarIntegration {
     try {
       await this.ensureInitialized();
       
-      if (!this.isUserSignedIn() || !this.gapi) return false;
+      if (!this.isUserSignedIn() || !this.gapi) {
+        throw new Error('User not signed in to Google Calendar');
+      }
+
+      // Ensure we have a fresh access token
+      this.updateAccessToken();
+      if (!this.accessToken) {
+        throw new Error('No valid access token available');
+      }
 
       await this.gapi.client.calendar.events.delete({
         calendarId: 'primary',
         eventId: eventId
       });
 
-      console.log('Calendar event deleted');
+      console.log(`Deleted calendar event: ${eventId}`);
       return true;
     } catch (error) {
       console.error('Error deleting calendar event:', error);
@@ -219,234 +388,105 @@ export class GoogleCalendarIntegration {
     }
   }
 
-  // Build calendar event object following Google Calendar API v3 specification
-  private buildCalendarEvent(job: JobEntry, eventType: 'application' | 'interview' | 'followup') {
-    let title: string;
+  // Build calendar event from job data
+  private buildCalendarEvent(job: JobEntry, eventType: 'application' | 'interview' | 'followup'): CalendarEvent | null {
+    const now = new Date();
+    let startTime: Date;
+    let summary: string;
     let description: string;
-    let startDateTime: string;
-    let colorId: string;
-    let location: string | undefined;
 
     switch (eventType) {
       case 'application':
-        if (!job.applicationDate) return null;
-        title = `📝 Applied: ${job.company} - ${job.role}`;
-        description = this.buildApplicationDescription(job);
-        startDateTime = new Date(job.applicationDate).toISOString();
-        colorId = '1'; // Blue - per API docs: color IDs reference colors definition
+        // Fixed: Handle applicationDate as string
+        if (job.applicationDate) {
+          startTime = new Date(job.applicationDate);
+        } else {
+          startTime = now;
+        }
+        summary = `📄 Applied: ${job.role} at ${job.company}`;
+        description = `Job Application submitted for ${job.role} position at ${job.company}`;
         break;
 
       case 'interview':
         if (!job.interviewDate) return null;
-        title = `📅 Interview: ${job.company} - ${job.role}`;
-        description = this.buildInterviewDescription(job);
-        startDateTime = new Date(job.interviewDate).toISOString();
-        colorId = '5'; // Yellow
-        location = job.location || (job.isRemote ? 'Remote Interview' : undefined);
+        startTime = new Date(job.interviewDate);
+        summary = `💼 Interview: ${job.role} at ${job.company}`;
+        description = `Job Interview for ${job.role} position at ${job.company}`;
         break;
 
       case 'followup':
         if (!job.followUpDate) return null;
-        title = `📞 Follow-up: ${job.company} - ${job.role}`;
-        description = this.buildFollowUpDescription(job);
-        startDateTime = new Date(job.followUpDate).toISOString();
-        colorId = '10'; // Green
+        startTime = new Date(job.followUpDate);
+        summary = `📞 Follow-up: ${job.role} at ${job.company}`;
+        description = `Follow-up for ${job.role} position at ${job.company}`;
         break;
 
       default:
         return null;
     }
 
-    // Calculate end time (1 hour for interviews, 30 minutes for others)
-    const endDateTime = new Date(startDateTime);
-    endDateTime.setHours(endDateTime.getHours() + (eventType === 'interview' ? 1 : 0.5));
+    // Set end time (1 hour later for interviews, 30 minutes for others)
+    const endTime = new Date(startTime);
+    endTime.setMinutes(endTime.getMinutes() + (eventType === 'interview' ? 60 : 30));
 
-    // Build event object according to API specification
-    const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
-    
-    const calendarEvent: {
-      summary: string;
-      description: string;
-      start: { dateTime: string; timeZone: string };
-      end: { dateTime: string; timeZone: string };
-      colorId: string;
-      reminders: {
-        useDefault: boolean;
-        overrides: Array<{ method: string; minutes: number }>;
-      };
-      extendedProperties: {
-        private: Record<string, string>;
-      };
-      transparency: string;
-      visibility: string;
-      eventType: string;
-      location?: string;
-      source?: { title: string; url: string };
-    } = {
-      summary: title,
-      description: description,
+    const event: CalendarEvent = {
+      summary,
+      description: `${description}\n\n📍 Location: ${job.location || 'Not specified'}\n💰 Salary: ${job.salary ? formatSalary(typeof job.salary === 'string' ? Number(job.salary) : job.salary, 'USD') : 'Not specified'}\n🔗 Link: ${job.link || 'Not provided'}`,
       start: {
-        dateTime: startDateTime,
-        timeZone: timeZone
+        dateTime: startTime.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       },
       end: {
-        dateTime: endDateTime.toISOString(),
-        timeZone: timeZone
+        dateTime: endTime.toISOString(),
+        timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
       },
-      colorId: colorId,
-      // Enhanced reminders per API specification
       reminders: {
         useDefault: false,
         overrides: [
-          { 
-            method: 'email', 
-            minutes: eventType === 'interview' ? 60 : 1440 // 1 hour for interviews, 1 day for others
-          },
-          { 
-            method: 'popup', 
-            minutes: eventType === 'interview' ? 15 : 60 
-          }
+          { method: 'email', minutes: eventType === 'interview' ? 1440 : 60 }, // 24h for interviews, 1h for others
+          { method: 'popup', minutes: eventType === 'interview' ? 60 : 15 }    // 1h for interviews, 15min for others
         ]
-      },
-      // Add extended properties for better tracking (per API docs)
-      extendedProperties: {
-        private: {
-          'source': 'job-tracker-app',
-          'jobId': job.id || '',
-          'eventType': eventType,
-          'company': job.company,
-          'role': job.role
-        }
-      },
-      // Transparency setting per API docs
-      transparency: eventType === 'interview' ? 'opaque' : 'transparent', // Block time for interviews only
-      // Visibility setting
-      visibility: 'private', // Keep job-related events private
-      // Event type (must be 'default' for custom events per API docs)
-      eventType: 'default'
+      }
     };
 
-    // Add location if available
-    if (location) {
-      calendarEvent.location = location;
-    }
-
-    // Add source information for better tracking
-    if (job.link) {
-      calendarEvent.source = {
-        title: `Job Posting - ${job.company}`,
-        url: job.link
-      };
-    }
-
-    return calendarEvent;
+    return event;
   }
 
-  // Build application event description
-  private buildApplicationDescription(job: JobEntry): string {
-    let description = `Job Application Details:\n\n`;
-    description += `Company: ${job.company}\n`;
-    description += `Role: ${job.role}\n`;
-    description += `Status: ${job.status}\n`;
-    
-    if (job.location) description += `Location: ${job.location}\n`;
-    if (job.salary) description += `Salary: ${job.salary}\n`;
-    if (job.link) description += `Job Link: ${job.link}\n`;
-    if (job.notes) description += `\nNotes:\n${job.notes}\n`;
-    
-    description += `\n🎯 Tracker: Job Application Tracker`;
-    return description;
-  }
-
-  // Build interview event description
-  private buildInterviewDescription(job: JobEntry): string {
-    let description = `Interview Details:\n\n`;
-    description += `Company: ${job.company}\n`;
-    description += `Role: ${job.role}\n`;
-    description += `Type: Interview\n`;
-    
-    if (job.location) description += `Location: ${job.location}\n`;
-    if (job.isRemote) description += `Format: Remote\n`;
-    if (job.companyResearch) description += `\nCompany Research:\n${job.companyResearch}\n`;
-    if (job.notes) description += `\nNotes:\n${job.notes}\n`;
-    
-    description += `\n💡 Preparation Tips:\n`;
-    description += `- Review job description and requirements\n`;
-    description += `- Prepare STAR method examples\n`;
-    description += `- Research company culture and values\n`;
-    description += `- Prepare thoughtful questions to ask\n`;
-    
-    description += `\n🎯 Tracker: Job Application Tracker`;
-    return description;
-  }
-
-  // Build follow-up event description
-  private buildFollowUpDescription(job: JobEntry): string {
-    let description = `Follow-up Reminder:\n\n`;
-    description += `Company: ${job.company}\n`;
-    description += `Role: ${job.role}\n`;
-    description += `Current Status: ${job.status}\n`;
-    
-    if (job.notes) description += `\nNotes:\n${job.notes}\n`;
-    
-    description += `\n📞 Follow-up Actions:\n`;
-    description += `- Send polite follow-up email\n`;
-    description += `- Reiterate interest in the position\n`;
-    description += `- Ask for updates on timeline\n`;
-    description += `- Provide any additional information if needed\n`;
-    
-    description += `\n🎯 Tracker: Job Application Tracker`;
-    return description;
-  }
-
-  // Get upcoming events from calendar (improved with better filtering)
-  async getUpcomingEvents(maxResults: number = 50): Promise<Array<{ summary: string; start?: { dateTime?: string; date?: string } }>> {
-    try {
-      await this.ensureInitialized();
-      
-      if (!this.isUserSignedIn() || !this.gapi) return [];
-
-      // Use text search to find our events (most reliable approach)
-      const response = await this.gapi.client.calendar.events.list({
-        calendarId: 'primary',
-        timeMin: (new Date()).toISOString(),
-        maxResults: maxResults,
-        singleEvents: true,
-        orderBy: 'startTime',
-        q: 'Job Application Tracker' // Search for events created by our app
-      });
-
-      // Filter and type-safe return
-      return (response.result.items || [])
-        .filter(item => item.summary) // Only return events with summary
-        .map(item => ({
-          summary: item.summary!,
-          start: item.start
-        }));
-    } catch (error) {
-      console.error('Error fetching calendar events:', error);
-      return [];
-    }
-  }
-
-  // Get all events matching our job tracker pattern
+  // Get user's calendar events
   async getJobTrackerEvents(): Promise<Array<{ id: string; summary: string; description?: string }>> {
     try {
       await this.ensureInitialized();
       
-      if (!this.isUserSignedIn() || !this.gapi) return [];
+      if (!this.isUserSignedIn() || !this.gapi) {
+        throw new Error('User not signed in to Google Calendar');
+      }
 
-      // Search for events with our job tracker signature
-      const response = await this.gapi.client.calendar.events.list({
+      // Ensure we have a fresh access token
+      this.updateAccessToken();
+      if (!this.accessToken) {
+        throw new Error('No valid access token available');
+      }
+
+      const timeMin = new Date();
+      timeMin.setDate(timeMin.getDate() - 30); // Last 30 days
+
+      const timeMax = new Date();
+      timeMax.setDate(timeMax.getDate() + 90); // Next 90 days
+
+      const calendarResponse = await this.gapi.client.calendar.events.list({
         calendarId: 'primary',
-        maxResults: 100,
+        timeMin: timeMin.toISOString(),
+        timeMax: timeMax.toISOString(),
+        showDeleted: false,
         singleEvents: true,
-        q: '🎯 Tracker: Job Application Tracker' // Search by our signature
+        maxResults: 100,
+        orderBy: 'startTime',
+        q: 'Applied OR Interview OR Follow-up' // Search for job-related events
       });
 
-      return (response.result.items || [])
-        .filter(item => item.summary && item.id)
-        .map(item => ({
+      return (calendarResponse.result.items || [])
+        .filter((item: GoogleCalendarEvent) => item.summary && item.id)
+        .map((item: GoogleCalendarEvent) => ({
           id: item.id!,
           summary: item.summary!,
           description: item.description
@@ -473,6 +513,16 @@ export class GoogleCalendarIntegration {
   }
 }
 
+// Format salary for calendar events
+const formatSalary = (salary: number, currency: string): string => {
+  return new Intl.NumberFormat('en-US', {
+    style: 'currency',
+    currency: currency,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(salary);
+};
+
 // Singleton instance
 let calendarInstance: GoogleCalendarIntegration | null = null;
 
@@ -491,70 +541,37 @@ export const syncJobToCalendar = async (job: JobEntry): Promise<{
   error?: string;
 }> => {
   const calendar = getGoogleCalendar();
-  const results: {
-    applicationEventId?: string;
-    interviewEventId?: string;
-    followUpEventId?: string;
-    error?: string;
-  } = {};
-
+  const events: { [key: string]: string } = {};
+  
   try {
-    // Create events sequentially to avoid rate limiting
-    if (job.applicationDate) {
-      const eventId = await calendar.createJobEvent(job, 'application');
-      if (eventId) results.applicationEventId = eventId;
+    // Create application event
+    const applicationEventId = await calendar.createJobEvent(job, 'application');
+    if (applicationEventId) {
+      events.applicationEventId = applicationEventId;
     }
 
+    // Create interview event if date exists
     if (job.interviewDate) {
-      const eventId = await calendar.createJobEvent(job, 'interview');
-      if (eventId) results.interviewEventId = eventId;
+      const interviewEventId = await calendar.createJobEvent(job, 'interview');
+      if (interviewEventId) {
+        events.interviewEventId = interviewEventId;
+      }
     }
 
+    // Create follow-up event if date exists
     if (job.followUpDate) {
-      const eventId = await calendar.createJobEvent(job, 'followup');
-      if (eventId) results.followUpEventId = eventId;
+      const followUpEventId = await calendar.createJobEvent(job, 'followup');
+      if (followUpEventId) {
+        events.followUpEventId = followUpEventId;
+      }
     }
+
+    return events;
   } catch (error) {
-    results.error = error instanceof Error ? error.message : 'Unknown error occurred';
+    return { 
+      error: error instanceof Error ? error.message : 'Unknown error occurred' 
+    };
   }
-
-  return results;
-};
-
-// Sync multiple jobs to calendar efficiently
-export const syncMultipleJobsToCalendar = async (jobs: JobEntry[]): Promise<{
-  success: number;
-  failed: number;
-  errors: string[];
-}> => {
-  let success = 0;
-  let failed = 0;
-  const errors: string[] = [];
-
-  // Process jobs in batches to respect API rate limits
-  const batchSize = 5;
-  for (let i = 0; i < jobs.length; i += batchSize) {
-    const batch = jobs.slice(i, i + batchSize);
-    
-    await Promise.allSettled(
-      batch.map(async (job) => {
-        try {
-          await syncJobToCalendar(job);
-          success++;
-        } catch (error) {
-          failed++;
-          errors.push(`${job.company} - ${job.role}: ${error instanceof Error ? error.message : 'Unknown error'}`);
-        }
-      })
-    );
-
-    // Small delay between batches to be respectful to the API
-    if (i + batchSize < jobs.length) {
-      await new Promise(resolve => setTimeout(resolve, 100));
-    }
-  }
-
-  return { success, failed, errors };
 };
 
 export const removeJobFromCalendar = async (eventIds: string[]): Promise<{ success: boolean; error?: string }> => {
@@ -565,8 +582,12 @@ export const removeJobFromCalendar = async (eventIds: string[]): Promise<{ succe
 
     for (const eventId of eventIds) {
       if (eventId) {
-        const deleted = await calendar.deleteJobEvent(eventId);
-        if (!deleted) allDeleted = false;
+        try {
+          await calendar.deleteJobEvent(eventId);
+        } catch (error) {
+          console.error(`Failed to delete event ${eventId}:`, error);
+          allDeleted = false;
+        }
       }
     }
 
@@ -578,3 +599,6 @@ export const removeJobFromCalendar = async (eventIds: string[]): Promise<{ succe
     };
   }
 };
+
+// Export default calendar instance for easy access
+export default getGoogleCalendar();
