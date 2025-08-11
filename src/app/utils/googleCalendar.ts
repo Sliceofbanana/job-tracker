@@ -2,32 +2,35 @@
 
 import { JobEntry } from '../types';
 
-// Google API type definitions
-interface GoogleAuth {
-  isSignedIn: {
-    get(): boolean;
+// Google Identity Services (GIS) type definitions
+interface GoogleIdentityServices {
+  accounts: {
+    oauth2: {
+      initTokenClient(config: {
+        client_id: string;
+        scope: string;
+        callback: (response: TokenResponse) => void;
+        error_callback?: (error: Error) => void;
+      }): TokenClient;
+    };
   };
-  currentUser: {
-    get(): GoogleUser;
-  };
-  signIn(options?: { prompt?: string; ux_mode?: string }): Promise<GoogleUser>;
-  signOut(): Promise<void>;
 }
 
-interface GoogleUser {
-  isSignedIn(): boolean;
-  getAuthResponse(): {
-    access_token: string;
-    expires_in: number;
-  };
+interface TokenClient {
+  requestAccessToken(): void;
+}
+
+interface TokenResponse {
+  access_token: string;
+  expires_in: number;
+  scope: string;
+  token_type: string;
 }
 
 interface GoogleApiClient {
   init(config: {
     apiKey: string;
-    clientId: string;
     discoveryDocs: string[];
-    scope: string;
   }): Promise<void>;
   calendar: {
     events: {
@@ -56,6 +59,7 @@ interface GoogleApiClient {
       }): Promise<void>;
     };
   };
+  setToken(token: { access_token: string }): void;
 }
 
 interface GoogleCalendarEvent {
@@ -73,9 +77,6 @@ interface GoogleCalendarEvent {
 interface GapiClient {
   load: (apis: string, callback: () => void) => void;
   client: GoogleApiClient;
-  auth2: {
-    getAuthInstance(): GoogleAuth;
-  };
 }
 
 // Calendar event interface - Fixed to match Google Calendar API
@@ -107,18 +108,20 @@ export class GoogleCalendarIntegration {
   private readonly discoveryDocs = ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'];
   
   private gapi: GapiClient | null = null;
+  private tokenClient: TokenClient | null = null;
   private isInitialized = false;
   private isInitializing = false;
   private initializationPromise: Promise<void> | null = null;
   private initializationError: Error | null = null;
   private accessToken: string | null = null;
+  private isSignedIn = false;
 
   constructor() {
     // Initialize when instantiated
     this.initialize();
   }
 
-  // Initialize Google API - Now uses popup instead of iframe
+  // Initialize Google API with new Google Identity Services
   private async initialize(): Promise<void> {
     if (this.isInitialized || this.isInitializing) {
       if (this.initializationPromise) {
@@ -142,32 +145,47 @@ export class GoogleCalendarIntegration {
           await this.loadGoogleApiScript();
         }
 
-        // Wait for gapi to be ready
+        // Load Google Identity Services script
+        if (!(window as typeof window & { google?: GoogleIdentityServices }).google) {
+          await this.loadGoogleIdentityScript();
+        }
+
+        // Wait for gapi to be ready (only client, no auth2)
         await new Promise<void>((gapiResolve) => {
-          (window as typeof window & { gapi: GapiClient }).gapi.load('client:auth2', gapiResolve);
+          (window as typeof window & { gapi: GapiClient }).gapi.load('client', gapiResolve);
         });
 
-        // Initialize the client
+        // Initialize the client (no auth config needed)
         await (window as typeof window & { gapi: GapiClient }).gapi.client.init({
           apiKey: this.apiKey,
-          clientId: this.clientId,
-          discoveryDocs: this.discoveryDocs,
-          scope: this.scope
+          discoveryDocs: this.discoveryDocs
         });
 
         this.gapi = (window as typeof window & { gapi: GapiClient }).gapi;
+
+        // Initialize the OAuth2 token client
+        this.tokenClient = (window as typeof window & { google: GoogleIdentityServices }).google.accounts.oauth2.initTokenClient({
+          client_id: this.clientId,
+          scope: this.scope,
+          callback: (response: TokenResponse) => {
+            this.accessToken = response.access_token;
+            this.isSignedIn = true;
+            // Set the token for API calls
+            if (this.gapi) {
+              this.gapi.client.setToken({ access_token: response.access_token });
+            }
+          },
+          error_callback: (error: Error) => {
+            console.error('OAuth error:', error);
+            this.isSignedIn = false;
+            this.accessToken = null;
+          }
+        });
+
         this.isInitialized = true;
         this.isInitializing = false;
 
-        // Check if user is already signed in
-        if (this.gapi) {
-          const authInstance = this.gapi.auth2.getAuthInstance();
-          if (authInstance && authInstance.isSignedIn && authInstance.isSignedIn.get()) {
-            this.updateAccessToken();
-          }
-        }
-
-        console.log('Google Calendar API initialized successfully');
+        console.log('Google Calendar API initialized successfully with new GIS');
         resolve();
       } catch (error) {
         this.isInitializing = false;
@@ -196,6 +214,22 @@ export class GoogleCalendarIntegration {
     });
   }
 
+  // Load Google Identity Services script
+  private loadGoogleIdentityScript(): Promise<void> {
+    return new Promise((resolve, reject) => {
+      if ((window as typeof window & { google?: GoogleIdentityServices }).google) {
+        resolve();
+        return;
+      }
+
+      const script = document.createElement('script');
+      script.src = 'https://accounts.google.com/gsi/client';
+      script.onload = () => resolve();
+      script.onerror = () => reject(new Error('Failed to load Google Identity Services script'));
+      document.head.appendChild(script);
+    });
+  }
+
   // Ensure initialization is complete before proceeding
   private async ensureInitialized(): Promise<void> {
     if (!this.isInitialized) {
@@ -210,53 +244,57 @@ export class GoogleCalendarIntegration {
       throw this.initializationError;
     }
 
-    if (!this.gapi) {
+    if (!this.gapi || !this.tokenClient) {
       throw new Error('Google API not available');
     }
   }
 
-  // Update access token from current auth state
-  private updateAccessToken(): void {
-    if (!this.gapi) return;
-
-    const authInstance = this.gapi.auth2.getAuthInstance();
-    if (authInstance && authInstance.isSignedIn && authInstance.isSignedIn.get()) {
-      const currentUser = authInstance.currentUser.get();
-      const authResponse = currentUser.getAuthResponse();
-      this.accessToken = authResponse.access_token;
-    } else {
-      this.accessToken = null;
-    }
-  }
-
-  // Sign in user with popup (no iframe)
+  // Sign in user with new Google Identity Services
   async signIn(): Promise<boolean> {
     try {
       await this.ensureInitialized();
       
-      if (!this.gapi) {
-        throw new Error('Google API not initialized');
-      }
-
-      const authInstance = this.gapi.auth2.getAuthInstance();
-      if (!authInstance) {
-        throw new Error('Auth instance not available');
+      if (!this.tokenClient) {
+        throw new Error('Google Identity Services not initialized');
       }
 
       // Check if already signed in
-      if (authInstance.isSignedIn.get()) {
-        this.updateAccessToken();
+      if (this.isSignedIn) {
         return true;
       }
 
-      // Sign in with popup (explicitly avoid iframe)
-      await authInstance.signIn({
-        prompt: 'select_account',
-        ux_mode: 'popup' // Force popup mode
+      // Request access token using the new GIS
+      return new Promise<boolean>((resolve) => {
+        // Set up a temporary callback for this sign-in attempt
+        const originalCallback = this.tokenClient;
+        
+        // Create a new token client for this sign-in attempt
+        if ((window as typeof window & { google: GoogleIdentityServices }).google) {
+          const tempTokenClient = (window as typeof window & { google: GoogleIdentityServices }).google.accounts.oauth2.initTokenClient({
+            client_id: this.clientId,
+            scope: this.scope,
+            callback: (response: TokenResponse) => {
+              this.accessToken = response.access_token;
+              this.isSignedIn = true;
+              // Set the token for API calls
+              if (this.gapi) {
+                this.gapi.client.setToken({ access_token: response.access_token });
+              }
+              resolve(true);
+            },
+            error_callback: (error: Error) => {
+              console.error('OAuth error:', error);
+              this.isSignedIn = false;
+              this.accessToken = null;
+              resolve(false);
+            }
+          });
+          
+          tempTokenClient.requestAccessToken();
+        } else {
+          resolve(false);
+        }
       });
-
-      this.updateAccessToken();
-      return this.isUserSignedIn();
     } catch (error) {
       console.error('Sign-in failed:', error);
       return false;
@@ -266,16 +304,16 @@ export class GoogleCalendarIntegration {
   // Sign out user
   async signOut(): Promise<void> {
     try {
-      await this.ensureInitialized();
+      // Clear the access token
+      this.accessToken = null;
+      this.isSignedIn = false;
       
-      if (!this.gapi) return;
-
-      const authInstance = this.gapi.auth2.getAuthInstance();
-      if (authInstance && authInstance.isSignedIn.get()) {
-        await authInstance.signOut();
+      // Clear the token from the client
+      if (this.gapi) {
+        this.gapi.client.setToken({ access_token: '' });
       }
       
-      this.accessToken = null;
+      console.log('Signed out successfully');
     } catch (error) {
       console.error('Sign-out failed:', error);
     }
@@ -283,10 +321,7 @@ export class GoogleCalendarIntegration {
 
   // Check if user is signed in
   isUserSignedIn(): boolean {
-    if (!this.gapi) return false;
-
-    const authInstance = this.gapi.auth2.getAuthInstance();
-    return authInstance && authInstance.isSignedIn ? authInstance.isSignedIn.get() : false;
+    return this.isSignedIn && !!this.accessToken;
   }
 
   // Create calendar event for job
@@ -299,7 +334,6 @@ export class GoogleCalendarIntegration {
       }
 
       // Ensure we have a fresh access token
-      this.updateAccessToken();
       if (!this.accessToken) {
         throw new Error('No valid access token available');
       }
@@ -336,7 +370,6 @@ export class GoogleCalendarIntegration {
       }
 
       // Ensure we have a fresh access token
-      this.updateAccessToken();
       if (!this.accessToken) {
         throw new Error('No valid access token available');
       }
@@ -370,7 +403,6 @@ export class GoogleCalendarIntegration {
       }
 
       // Ensure we have a fresh access token
-      this.updateAccessToken();
       if (!this.accessToken) {
         throw new Error('No valid access token available');
       }
@@ -462,7 +494,6 @@ export class GoogleCalendarIntegration {
       }
 
       // Ensure we have a fresh access token
-      this.updateAccessToken();
       if (!this.accessToken) {
         throw new Error('No valid access token available');
       }
