@@ -60,7 +60,11 @@ export default function Home() {
   const { user, login, logout } = useAuth();
   const { notifications, dismissNotification, showSuccess, showError, showWarning, showInfo } = useNotifications();
   const { country } = useCurrencySettings();
-  const { isAdmin: isUserAdmin, isLoading: adminLoading } = useAdminStatus(user);
+  
+  // Temporarily disable admin status to prevent Firestore errors
+  // const { isAdmin: isUserAdmin, isLoading: adminLoading } = useAdminStatus(user);
+  const isUserAdmin = false; // Temporary fix
+  const adminLoading = false; // Temporary fix
 
   const [jobs, setJobs] = useState<JobEntry[]>([]);
   const [openMenuId, setOpenMenuId] = useState<string | null>(null);
@@ -249,8 +253,12 @@ export default function Home() {
   // Fetch jobs when user logs in
   useEffect(() => {
     const fetchJobs = async () => {
-      if (!user) return;
+      if (!user) {
+        console.log("No user logged in, skipping job fetch");
+        return;
+      }
       
+      console.log("Fetching jobs for user:", user.uid, user.email);
       setLoading(true);
       setError(null);
       try {
@@ -271,8 +279,8 @@ export default function Home() {
             ...doc.data()
           })) as JobEntry[];
           console.log("✅ Loaded jobs with optimized query (composite index):", jobsData.length);
-        } catch {
-          console.log("⚠️ Composite index not available, trying fallback query...");
+        } catch (optimizedError) {
+          console.log("⚠️ Composite index not available, trying fallback query...", optimizedError);
           
           // Strategy 2: Fallback to simple query without orderBy
           try {
@@ -294,8 +302,18 @@ export default function Home() {
             console.log("✅ Loaded jobs with fallback query + client sorting:", jobsData.length);
           } catch (fallbackError) {
             console.error("❌ Both queries failed:", fallbackError);
-            // Only show error for new users if all queries fail
-            if (user) {
+            
+            // Check if it's a permissions error
+            if (fallbackError && typeof fallbackError === 'object' && 'code' in fallbackError) {
+              const firestoreError = fallbackError as { code: string, message: string };
+              if (firestoreError.code === 'permission-denied') {
+                setError("Access denied. Please ensure you're logged in and try refreshing the page.");
+              } else if (firestoreError.code === 'unauthenticated') {
+                setError("Authentication required. Please log in again.");
+              } else {
+                setError(`Database error: ${firestoreError.message}`);
+              }
+            } else {
               setError("Having trouble loading your jobs. Please refresh the page or check your connection.");
             }
             return;
@@ -438,7 +456,7 @@ export default function Home() {
           🚪 <span className="hidden sm:inline">Logout</span>
         </button>
 
-        <div className="flex flex-col lg:flex-row items-start justify-center gap-4 max-w-7xl mx-auto">
+        <div className="flex flex-col lg:flex-row items-start justify-center max-w-7xl mx-auto">
           {/* Desktop Sidebar */}
           <div className="hidden lg:flex flex-col gap-3 pt-8 sticky top-4">
             {[
@@ -491,8 +509,7 @@ export default function Home() {
           </div>
 
           {/* Main Content */}
-          <div className="w-full max-w-6xl bg-gradient-to-br from-purple-600/80 to-blue-700/80 rounded-xl backdrop-blur-md border border-white/20 p-4 lg:p-8 relative overflow-hidden">
-            {/* Decorative corners */}
+          <div className="w-full max-w-6xl bg-gradient-to-br from-purple-600/80 to-blue-700/80 rounded-xl lg:rounded-r-xl backdrop-blur-md border border-white/20 p-4 lg:p-8 relative overflow-hidden">
             <div className="absolute top-0 right-0 w-24 h-24 bg-cyan-400/30 rounded-full blur-[60px] pointer-events-none" style={{ transform: 'translate(50%, -50%)' }} />
             <div className="absolute bottom-0 left-0 w-24 h-24 bg-fuchsia-500/30 rounded-full blur-[60px] pointer-events-none" style={{ transform: 'translate(-50%, 50%)' }} />
 

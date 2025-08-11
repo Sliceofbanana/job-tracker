@@ -102,8 +102,8 @@ interface CalendarEvent {
 
 // Google Calendar Integration Class
 export class GoogleCalendarIntegration {
-  private readonly clientId = '371415396058-m01mutscge7tgu9jot50cidm4qij40oe.apps.googleusercontent.com';
-  private readonly apiKey = 'AIzaSyC7rrJKo4bTayTgCGLsL_gOyZaZCnqL89c';
+  private readonly clientId: string;
+  private readonly apiKey: string;
   private readonly scope = 'https://www.googleapis.com/auth/calendar';
   private readonly discoveryDocs = ['https://www.googleapis.com/discovery/v1/apis/calendar/v3/rest'];
   
@@ -117,16 +117,46 @@ export class GoogleCalendarIntegration {
   private isSignedIn = false;
 
   constructor() {
-    // Initialize when instantiated
-    this.initialize();
+    // Get API keys from environment variables
+    this.clientId = process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID || '';
+    this.apiKey = process.env.NEXT_PUBLIC_GOOGLE_API_KEY || '';
+    
+    console.log('Google Calendar API Configuration:');
+    console.log('Client ID configured:', !!this.clientId);
+    console.log('API Key configured:', !!this.apiKey);
+    
+    if (!this.clientId || !this.apiKey) {
+      console.error('Google Calendar API keys not found in environment variables');
+      console.error('Missing Client ID:', !this.clientId);
+      console.error('Missing API Key:', !this.apiKey);
+      return;
+    }
+    
+    // Only initialize if we're in the browser
+    if (typeof window !== 'undefined') {
+      console.log('Initializing Google Calendar API...');
+      this.initialize();
+    }
   }
 
   // Initialize Google API with new Google Identity Services
   private async initialize(): Promise<void> {
+    // Skip initialization if not in browser environment
+    if (typeof window === 'undefined') {
+      console.log('Skipping Google Calendar initialization - not in browser environment');
+      return;
+    }
+
     if (this.isInitialized || this.isInitializing) {
       if (this.initializationPromise) {
         return this.initializationPromise;
       }
+      return;
+    }
+
+    // Check for API keys
+    if (!this.clientId || !this.apiKey) {
+      this.initializationError = new Error('Google Calendar API keys not configured');
       return;
     }
 
@@ -135,62 +165,92 @@ export class GoogleCalendarIntegration {
 
     this.initializationPromise = new Promise(async (resolve, reject) => {
       try {
-        // Check if we're in a browser environment
-        if (typeof window === 'undefined') {
-          throw new Error('Google Calendar integration requires browser environment');
-        }
-
-        // Load Google API script if not already loaded
+        console.log('🔄 Starting Google Calendar API initialization...');
+        
+        // Load Google API script - this is essential
         if (!(window as typeof window & { gapi?: GapiClient }).gapi) {
+          console.log('📥 Loading Google API script...');
           await this.loadGoogleApiScript();
+        } else {
+          console.log('✅ Google API script already loaded');
         }
 
-        // Load Google Identity Services script
-        if (!(window as typeof window & { google?: GoogleIdentityServices }).google) {
-          await this.loadGoogleIdentityScript();
+        // Load Google Identity Services script - optional, app can work without it
+        let gisAvailable = false;
+        try {
+          if (!(window as typeof window & { google?: GoogleIdentityServices }).google) {
+            console.log('📥 Loading Google Identity Services script...');
+            await this.loadGoogleIdentityScript();
+          } else {
+            console.log('✅ Google Identity Services already loaded');
+          }
+          gisAvailable = !!(window as typeof window & { google?: GoogleIdentityServices }).google?.accounts;
+          console.log('Google Identity Services available:', gisAvailable);
+        } catch (error) {
+          console.warn('⚠️ Google Identity Services unavailable, calendar authentication will be disabled:', error);
+          gisAvailable = false;
         }
 
         // Wait for gapi to be ready (only client, no auth2)
-        await new Promise<void>((gapiResolve) => {
-          (window as typeof window & { gapi: GapiClient }).gapi.load('client', gapiResolve);
+        console.log('🔄 Initializing Google API client...');
+        await new Promise<void>((gapiResolve, gapiReject) => {
+          try {
+            (window as typeof window & { gapi: GapiClient }).gapi.load('client', gapiResolve);
+          } catch (error) {
+            console.error('❌ Failed to load Google API client:', error);
+            gapiReject(error);
+          }
         });
 
         // Initialize the client (no auth config needed)
+        console.log('🔄 Initializing Google Calendar API client...');
         await (window as typeof window & { gapi: GapiClient }).gapi.client.init({
           apiKey: this.apiKey,
           discoveryDocs: this.discoveryDocs
         });
 
         this.gapi = (window as typeof window & { gapi: GapiClient }).gapi;
+        console.log('✅ Google API client initialized successfully');
 
-        // Initialize the OAuth2 token client
-        this.tokenClient = (window as typeof window & { google: GoogleIdentityServices }).google.accounts.oauth2.initTokenClient({
-          client_id: this.clientId,
-          scope: this.scope,
-          callback: (response: TokenResponse) => {
-            this.accessToken = response.access_token;
-            this.isSignedIn = true;
-            // Set the token for API calls
-            if (this.gapi) {
-              this.gapi.client.setToken({ access_token: response.access_token });
-            }
-          },
-          error_callback: (error: Error) => {
-            console.error('OAuth error:', error);
-            this.isSignedIn = false;
-            this.accessToken = null;
+        // Only initialize the OAuth2 token client if Google Identity Services are available
+        if (gisAvailable && (window as typeof window & { google?: GoogleIdentityServices }).google?.accounts) {
+          try {
+            console.log('🔄 Initializing OAuth2 token client...');
+            this.tokenClient = (window as typeof window & { google: GoogleIdentityServices }).google.accounts.oauth2.initTokenClient({
+              client_id: this.clientId,
+              scope: this.scope,
+              callback: (response: TokenResponse) => {
+                console.log('✅ OAuth token received successfully');
+                this.accessToken = response.access_token;
+                this.isSignedIn = true;
+                // Set the token for API calls
+                if (this.gapi) {
+                  this.gapi.client.setToken({ access_token: response.access_token });
+                }
+              },
+              error_callback: (error: Error) => {
+                console.error('❌ OAuth error:', error);
+                this.isSignedIn = false;
+                this.accessToken = null;
+              }
+            });
+            console.log('✅ Google Identity Services token client initialized');
+          } catch (error) {
+            console.warn('⚠️ Failed to initialize Google Identity Services token client:', error);
           }
-        });
+        } else {
+          console.warn('⚠️ Google Identity Services not available - calendar authentication disabled');
+        }
 
         this.isInitialized = true;
         this.isInitializing = false;
 
-        console.log('Google Calendar API initialized successfully with new GIS');
+        console.log('🎉 Google Calendar API initialized successfully');
         resolve();
       } catch (error) {
         this.isInitializing = false;
         this.initializationError = error instanceof Error ? error : new Error('Unknown initialization error');
-        console.error('Failed to initialize Google Calendar API:', error);
+        console.error('❌ Failed to initialize Google Calendar API:', error);
         reject(this.initializationError);
       }
     });
@@ -201,33 +261,121 @@ export class GoogleCalendarIntegration {
   // Load Google API script dynamically
   private loadGoogleApiScript(): Promise<void> {
     return new Promise((resolve, reject) => {
-      if ((window as typeof window & { gapi?: GapiClient }).gapi) {
+      // Check if GAPI script is already loaded
+      if (document.querySelector('script[src="https://apis.google.com/js/api.js"]')) {
+        console.log('Google API script already loaded');
+        resolve();
+        return;
+      }
+
+      if ((window as any).gapi) {
+        console.log('Google API already available');
         resolve();
         return;
       }
 
       const script = document.createElement('script');
       script.src = 'https://apis.google.com/js/api.js';
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Failed to load Google API script'));
+      script.async = true;
+      script.defer = true;
+      script.crossOrigin = 'anonymous';
+      
+      // Add timeout
+      const timeout = setTimeout(() => {
+        script.remove();
+        reject(new Error('Google API script loading timed out'));
+      }, 15000);
+      
+      script.onload = () => {
+        clearTimeout(timeout);
+        console.log('✅ Google API script loaded successfully');
+        resolve();
+      };
+      
+      script.onerror = () => {
+        clearTimeout(timeout);
+        script.remove();
+        reject(new Error('Failed to load Google API script. This may be due to network connectivity issues or browser restrictions.'));
+      };
+      
       document.head.appendChild(script);
     });
   }
 
-  // Load Google Identity Services script
+  // Update the loadGoogleIdentityScript method to handle CSP better
   private loadGoogleIdentityScript(): Promise<void> {
     return new Promise((resolve, reject) => {
-      if ((window as typeof window & { google?: GoogleIdentityServices }).google) {
+      // Check if script is already loaded
+      if (document.querySelector('script[src="https://accounts.google.com/gsi/client"]')) {
+        console.log('Google Identity Services script already loaded');
+        resolve();
+        return;
+      }
+
+      // Check if Google Identity Services is already available
+      if ((window as any).google?.accounts?.oauth2) {
+        console.log('Google Identity Services already available');
         resolve();
         return;
       }
 
       const script = document.createElement('script');
       script.src = 'https://accounts.google.com/gsi/client';
-      script.onload = () => resolve();
-      script.onerror = () => reject(new Error('Failed to load Google Identity Services script'));
+      script.async = true;
+      script.defer = true;
+      script.crossOrigin = 'anonymous';
+      script.referrerPolicy = 'no-referrer-when-downgrade';
+      
+      // Add timeout to prevent hanging
+      const timeout = setTimeout(() => {
+        script.remove();
+        reject(new Error('Google Identity Services script loading timed out. This may be due to network issues or browser restrictions.'));
+      }, 15000); // 15 second timeout
+    
+      script.onload = () => {
+        clearTimeout(timeout);
+        console.log('✅ Google Identity Services script loaded successfully');
+        // Wait a bit for the script to initialize
+        setTimeout(() => {
+          if ((window as any).google?.accounts?.oauth2) {
+            resolve();
+          } else {
+            reject(new Error('Google Identity Services not available after script load'));
+          }
+        }, 500);
+      };
+      
+      script.onerror = () => {
+        clearTimeout(timeout);
+        script.remove();
+        // Don't reject immediately - let the app continue without GIS
+        console.warn('⚠️ Google Identity Services script failed to load. Calendar authentication will be disabled.');
+        resolve(); // Resolve instead of reject to allow app to continue
+      };
+      
+      // Add script to document head
       document.head.appendChild(script);
     });
+  }
+
+  // Check if Google services are available (for graceful degradation)
+  isGoogleServicesAvailable(): boolean {
+    if (typeof window === 'undefined') return false;
+    
+    return !!(window as typeof window & { google?: GoogleIdentityServices }).google?.accounts;
+  }
+
+  // Get a user-friendly message about service availability
+  getServiceAvailabilityMessage(): string | null {
+    if (typeof window === 'undefined') {
+      return 'Google Calendar services are only available in the browser.';
+    }
+    
+    if (!this.isGoogleServicesAvailable()) {
+      return 'Google Calendar services are currently unavailable. This may be due to ad blockers, privacy settings, or network restrictions. You can still use the job tracker without calendar integration.';
+    }
+    
+    return null;
   }
 
   // Ensure initialization is complete before proceeding
@@ -249,55 +397,94 @@ export class GoogleCalendarIntegration {
     }
   }
 
-  // Sign in user with new Google Identity Services
+  // Sign in user with new Google Identity Services (for calendar only)
   async signIn(): Promise<boolean> {
     try {
+      console.log('🔄 Attempting Google Calendar sign-in...');
       await this.ensureInitialized();
       
+      // Check if Google Identity Services are available
+      if (!this.isGoogleServicesAvailable()) {
+        const message = 'Google Calendar authentication is not available. This may be due to browser restrictions, ad blockers, or network issues. Please check your browser settings and try again.';
+        console.error('❌', message);
+        throw new Error(message);
+      }
+      
       if (!this.tokenClient) {
-        throw new Error('Google Identity Services not initialized');
+        console.log('🔄 Token client not available, trying to create...');
+        // Try to create token client if Google services became available
+        if ((window as typeof window & { google?: GoogleIdentityServices }).google?.accounts) {
+          try {
+            this.tokenClient = (window as typeof window & { google: GoogleIdentityServices }).google.accounts.oauth2.initTokenClient({
+              client_id: this.clientId,
+              scope: this.scope,
+              callback: () => {}, // Will be overridden below
+            });
+            console.log('✅ Token client created successfully');
+          } catch (error) {
+            console.error('❌ Failed to create token client:', error);
+            throw new Error('Failed to initialize Google authentication. Please refresh the page and try again.');
+          }
+        } else {
+          const message = 'Google authentication services are not available. Please check your internet connection and browser settings.';
+          console.error('❌', message);
+          throw new Error(message);
+        }
       }
 
       // Check if already signed in
-      if (this.isSignedIn) {
+      if (this.isSignedIn && this.accessToken) {
+        console.log('✅ Already signed in to Google Calendar');
         return true;
       }
 
       // Request access token using the new GIS
+      console.log('🔄 Requesting access token...');
       return new Promise<boolean>((resolve) => {
-        // Set up a temporary callback for this sign-in attempt
-        const originalCallback = this.tokenClient;
-        
-        // Create a new token client for this sign-in attempt
-        if ((window as typeof window & { google: GoogleIdentityServices }).google) {
-          const tempTokenClient = (window as typeof window & { google: GoogleIdentityServices }).google.accounts.oauth2.initTokenClient({
-            client_id: this.clientId,
-            scope: this.scope,
-            callback: (response: TokenResponse) => {
-              this.accessToken = response.access_token;
-              this.isSignedIn = true;
-              // Set the token for API calls
-              if (this.gapi) {
-                this.gapi.client.setToken({ access_token: response.access_token });
+        try {
+          // Create a new token client for this sign-in attempt
+          if ((window as typeof window & { google: GoogleIdentityServices }).google?.accounts) {
+            const tempTokenClient = (window as typeof window & { google: GoogleIdentityServices }).google.accounts.oauth2.initTokenClient({
+              client_id: this.clientId,
+              scope: this.scope,
+              callback: (response: TokenResponse) => {
+                try {
+                  console.log('✅ Authentication successful, processing token...');
+                  this.accessToken = response.access_token;
+                  this.isSignedIn = true;
+                  // Set the token for API calls
+                  if (this.gapi) {
+                    this.gapi.client.setToken({ access_token: response.access_token });
+                  }
+                  console.log('🎉 Google Calendar authentication completed successfully');
+                  resolve(true);
+                } catch (error) {
+                  console.error('❌ Error processing authentication response:', error);
+                  resolve(false);
+                }
+              },
+              error_callback: (error: Error) => {
+                console.error('❌ Calendar OAuth error:', error);
+                this.isSignedIn = false;
+                this.accessToken = null;
+                resolve(false);
               }
-              resolve(true);
-            },
-            error_callback: (error: Error) => {
-              console.error('OAuth error:', error);
-              this.isSignedIn = false;
-              this.accessToken = null;
-              resolve(false);
-            }
-          });
-          
-          tempTokenClient.requestAccessToken();
-        } else {
+            });
+            
+            console.log('🔄 Triggering authentication popup...');
+            tempTokenClient.requestAccessToken();
+          } else {
+            console.error('❌ Google Identity Services not available for sign-in');
+            resolve(false);
+          }
+        } catch (error) {
+          console.error('❌ Error during sign-in process:', error);
           resolve(false);
         }
       });
     } catch (error) {
-      console.error('Sign-in failed:', error);
-      return false;
+      console.error('❌ Calendar sign-in failed:', error);
+      throw error; // Re-throw so the UI can handle it properly
     }
   }
 
@@ -558,6 +745,22 @@ const formatSalary = (salary: number, currency: string): string => {
 let calendarInstance: GoogleCalendarIntegration | null = null;
 
 export const getGoogleCalendar = (): GoogleCalendarIntegration => {
+  // Only create instance in browser environment
+  if (typeof window === 'undefined') {
+    // Return a mock instance for SSR
+    return {
+      isUserSignedIn: () => false,
+      signIn: () => Promise.resolve(false),
+      signOut: () => Promise.resolve(),
+      createJobEvent: () => Promise.resolve(null),
+      updateJobEvent: () => Promise.resolve(false),
+      deleteJobEvent: () => Promise.resolve(false),
+      getJobTrackerEvents: () => Promise.resolve([]),
+      canInitialize: () => Promise.resolve(false),
+      getInitializationError: () => new Error('Not in browser environment')
+    } as any;
+  }
+
   if (!calendarInstance) {
     calendarInstance = new GoogleCalendarIntegration();
   }
@@ -631,5 +834,5 @@ export const removeJobFromCalendar = async (eventIds: string[]): Promise<{ succe
   }
 };
 
-// Export default calendar instance for easy access
-export default getGoogleCalendar();
+// Export default calendar instance for easy access (only in browser)
+export default typeof window !== 'undefined' ? getGoogleCalendar() : null;

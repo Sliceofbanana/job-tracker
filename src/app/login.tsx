@@ -1,11 +1,15 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   createUserWithEmailAndPassword,
-  signInWithEmailAndPassword
+  signInWithEmailAndPassword,
+  signInWithPopup,
+  signInWithRedirect,
+  getRedirectResult,
+  GoogleAuthProvider
 } from "firebase/auth";
-import { auth } from "./firebase";
+import { auth, provider } from "./firebase";
 import SecurePasswordInput from "./components/SecurePasswordInput";
 import SanitizedInput from "./components/SanitizedInput";
 import { usePasswordAttemptLimit } from "./utils/usePasswordHooks";
@@ -58,6 +62,7 @@ const tips = [
 export default function Login({ onLogin }: LoginProps) {
   const [isSignUp, setIsSignUp] = useState(false);
   const [currentQuoteIndex, setCurrentQuoteIndex] = useState(0);
+  const [useRedirect, setUseRedirect] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
@@ -72,22 +77,41 @@ export default function Login({ onLogin }: LoginProps) {
 
   useEffect(() => {
     setCurrentQuoteIndex(Math.floor(Math.random() * quotes.length));
-  }, []);
+    
+    // Check for redirect result on component mount
+    const checkRedirectResult = async () => {
+      try {
+        const result = await getRedirectResult(auth);
+        if (result) {
+          console.log("Google redirect sign-in successful:", result.user);
+          onLogin();
+        }
+      } catch (error) {
+        console.error("Redirect result error:", error);
+        const authError = error as { code?: string };
+        if (authError.code) {
+          setErrors([`Sign-in failed: ${authError.code}`]);
+        }
+      }
+    };
+    
+    checkRedirectResult();
+  }, [onLogin]);
 
-  const handleEmailChange = (sanitizedEmail: string) => {
+  const handleEmailChange = useCallback((sanitizedEmail: string) => {
     setFormData(prev => ({ ...prev, email: sanitizedEmail }));
     setErrors([]);
-  };
+  }, []);
 
-  const handlePasswordChange = (password: string) => {
+  const handlePasswordChange = useCallback((password: string) => {
     setFormData(prev => ({ ...prev, password }));
     setErrors([]);
-  };
+  }, []);
 
-  const handleConfirmPasswordChange = (confirmPassword: string) => {
+  const handleConfirmPasswordChange = useCallback((confirmPassword: string) => {
     setFormData(prev => ({ ...prev, confirmPassword }));
     setErrors([]);
-  };
+  }, []);
 
   const validateForm = (): boolean => {
     const newErrors: string[] = [];
@@ -117,6 +141,73 @@ export default function Login({ onLogin }: LoginProps) {
     
     setErrors(newErrors);
     return newErrors.length === 0;
+  };
+
+  const handleGoogleSignIn = async () => {
+    setIsLoading(true);
+    setErrors([]);
+
+    try {
+      if (useRedirect) {
+        // Use redirect method as fallback
+        await signInWithRedirect(auth, provider);
+        // Note: The result will be handled in useEffect with getRedirectResult
+        return;
+      }
+
+      // Try popup method first, but catch popup-blocked errors
+      try {
+        const result = await signInWithPopup(auth, provider);
+        console.log("Google sign-in successful:", result.user);
+        onLogin();
+      } catch (popupError: unknown) {
+        const authError = popupError as { code?: string, message?: string };
+        
+        // Handle popup-blocked error specifically
+        if (authError.code === 'auth/popup-blocked') {
+          setErrors(['Pop-up blocked by browser. Switching to redirect method...']);
+          setUseRedirect(true);
+          setTimeout(() => {
+            signInWithRedirect(auth, provider);
+          }, 1500);
+          setIsLoading(false);
+          return;
+        } else if (authError.code === 'auth/popup-closed-by-user') {
+          setErrors(['Sign-in cancelled. Please try again and complete the Google sign-in process.']);
+          setIsLoading(false);
+          return;
+        } else {
+          // Re-throw other errors to be handled by outer catch
+          throw popupError;
+        }
+      }
+
+    } catch (error: unknown) {
+      console.error("Google sign-in error:", error);
+      
+      let errorMessage = "Failed to sign in with Google. Please try again.";
+      
+      const authError = error as { code?: string, message?: string };
+      if (authError.code === 'auth/network-request-failed') {
+        errorMessage = "Network error. Please check your internet connection and try again.";
+      } else if (authError.code === 'auth/too-many-requests') {
+        errorMessage = "Too many sign-in attempts. Please wait a few minutes and try again.";
+      } else if (authError.code === 'auth/unauthorized-domain') {
+        errorMessage = "This domain is not authorized for Google sign-in. Please contact support.";
+      } else if (authError.message?.includes('popup')) {
+        errorMessage = "Pop-up issue detected. Switching to redirect method...";
+        setUseRedirect(true);
+        setTimeout(() => {
+          signInWithRedirect(auth, provider);
+        }, 1500);
+        setIsLoading(false);
+        return;
+      }
+      
+      setErrors([errorMessage]);
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -330,8 +421,13 @@ export default function Login({ onLogin }: LoginProps) {
                   </div>
 
                   <button
-                    onClick={onLogin}
-                    className="w-full px-4 sm:px-6 py-2 sm:py-3 rounded-lg bg-gray-50 border-2 border-gray-200 text-gray-700 font-semibold hover:bg-gray-100 transition flex items-center justify-center hover:scale-105 transform cursor-pointer text-sm sm:text-base"
+                    onClick={handleGoogleSignIn}
+                    disabled={isLoading}
+                    className={`w-full px-4 sm:px-6 py-2 sm:py-3 rounded-lg border-2 border-gray-200 font-semibold transition flex items-center justify-center transform text-sm sm:text-base ${
+                      isLoading
+                        ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
+                        : 'bg-gray-50 text-gray-700 hover:bg-gray-100 hover:scale-105 cursor-pointer'
+                    }`}
                   >
                     <svg
                       className="w-4 h-4 sm:w-5 sm:h-5 mr-2"
@@ -355,9 +451,11 @@ export default function Login({ onLogin }: LoginProps) {
                       />
                     </svg>
                     <span className="hidden sm:inline">
-                      Continue with Google
+                      {isLoading ? (useRedirect ? 'Redirecting to Google...' : 'Connecting...') : 'Continue with Google'}
                     </span>
-                    <span className="sm:hidden">Google</span>
+                    <span className="sm:hidden">
+                      {isLoading ? (useRedirect ? 'Redirecting...' : 'Loading...') : 'Google'}
+                    </span>
                   </button>
                 </div>
 

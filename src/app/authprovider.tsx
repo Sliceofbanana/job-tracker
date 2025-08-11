@@ -1,10 +1,9 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { auth, provider } from "./firebase";
+import { auth } from "./firebase";
 import {
   onAuthStateChanged,
-  signInWithPopup,
   signOut,
   User,
 } from "firebase/auth";
@@ -21,12 +20,23 @@ export const AuthProvider = ({ children }: { children: React.ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, setUser);
+    const unsubscribe = onAuthStateChanged(auth, (user) => {
+      console.log("Auth state changed:", user ? `User: ${user.email}` : "No user");
+      setUser(user);
+    });
     return () => unsubscribe();
   }, []);
 
   const login = () => {
-    signInWithPopup(auth, provider);
+    // Force check the current auth state
+    console.log("Login function called - checking current auth state");
+    const currentUser = auth.currentUser;
+    if (currentUser) {
+      console.log("User is already authenticated:", currentUser.email);
+      setUser(currentUser);
+    } else {
+      console.log("No current user found, waiting for auth state change");
+    }
   };
 
   const logout = () => {

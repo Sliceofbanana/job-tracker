@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { useSanitizedInput } from '../utils/usePasswordHooks';
 import { isValidEmail, isValidUrl, isValidPhoneNumber } from '../utils/inputSanitization';
 
@@ -35,10 +35,22 @@ export default function SanitizedInput({
 }: SanitizedInputProps) {
   const [focused, setFocused] = useState(false);
   const { value: inputValue, sanitizedValue, setValue, isDirty } = useSanitizedInput(value, type);
+  const previousSanitizedValueRef = useRef(sanitizedValue);
 
   React.useEffect(() => {
-    onChange(sanitizedValue);
-  }, [sanitizedValue, onChange]);
+    // Only call onChange if the sanitized value actually changed and it's different from the external value
+    if (sanitizedValue !== previousSanitizedValueRef.current && sanitizedValue !== value) {
+      onChange(sanitizedValue);
+      previousSanitizedValueRef.current = sanitizedValue;
+    }
+  }, [sanitizedValue, onChange, value]);
+
+  // Update internal value when external value changes
+  React.useEffect(() => {
+    if (value !== inputValue) {
+      setValue(value);
+    }
+  }, [value, inputValue, setValue]);
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const newValue = e.target.value;

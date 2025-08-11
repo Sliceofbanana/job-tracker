@@ -23,15 +23,16 @@ service cloud.firestore {
              request.resource.data.keys().toSet().difference(resource.data.keys().toSet().union(allowedFields.toSet())).size() == 0;
     }
     
+    // Jobs collection - only authenticated users can access their own jobs
     match /jobs/{jobId} {
-      // Allow read and delete if user owns the document
-      allow read, delete: if request.auth != null && request.auth.uid == resource.data.uid;
-      // Allow create if user is authenticated and setting their own uid
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.uid;
       allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
-      // Allow update if user owns the document and maintains their uid
-      allow update: if request.auth != null && 
-                    request.auth.uid == resource.data.uid && 
-                    request.auth.uid == request.resource.data.uid;
+    }
+    
+    // Allow users to read/write their own data in any collection
+    match /{collection}/{document} {
+      allow read, write: if request.auth != null && request.auth.uid == resource.data.uid;
+      allow create: if request.auth != null && request.auth.uid == request.resource.data.uid;
     }
     
     match /feedback/{feedbackId} {
